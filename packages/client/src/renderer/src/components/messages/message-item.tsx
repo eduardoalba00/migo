@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { MarkdownRenderer } from "@/components/messages/markdown-renderer";
 import { EmojiPicker } from "@/components/messages/emoji-picker";
 import { AttachmentRenderer } from "@/components/messages/attachment-renderer";
+import { resolveUploadUrl } from "@/lib/api";
 import type { Message } from "@nexus/shared";
 
 interface MessageItemProps {
@@ -230,7 +231,7 @@ export function MessageItem({ message, compact }: MessageItemProps) {
       <div className="relative group flex items-start hover:bg-muted/30 p-4 gap-4">
         <div className="w-10 h-10 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-semibold shrink-0 hover:drop-shadow-md">
           {message.author.avatarUrl ? (
-            <img src={message.author.avatarUrl} className="w-10 h-10 rounded-full object-cover" alt="" />
+            <img src={resolveUploadUrl(message.author.avatarUrl)!} className="w-10 h-10 rounded-full object-cover" alt="" />
           ) : (
             message.author.displayName.charAt(0).toUpperCase()
           )}

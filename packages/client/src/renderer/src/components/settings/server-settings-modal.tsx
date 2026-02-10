@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { X, Settings, Users, Link, Trash2, Shield, Ban } from "lucide-react";
 import { useServerStore } from "@/stores/servers";
 import { useMemberStore } from "@/stores/members";
-import { api } from "@/lib/api";
+import { api, resolveUploadUrl } from "@/lib/api";
 import { SERVER_ROUTES, buildRoute } from "@nexus/shared";
 import type { Server, ServerMember, Invite, User } from "@nexus/shared";
 import { RolesSettings } from "./roles-settings";
@@ -147,7 +147,7 @@ function MembersTab({ server }: { server: Server }) {
           <div key={member.id} className="flex items-center gap-3 px-3 py-2 rounded hover:bg-muted">
             <div className="w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-semibold">
               {member.user.avatarUrl ? (
-                <img src={member.user.avatarUrl} className="w-8 h-8 rounded-full object-cover" alt="" />
+                <img src={resolveUploadUrl(member.user.avatarUrl)!} className="w-8 h-8 rounded-full object-cover" alt="" />
               ) : (
                 member.user.displayName.charAt(0).toUpperCase()
               )}
@@ -306,7 +306,7 @@ function BansTab({ server }: { server: Server }) {
             <div key={ban.id} className="flex items-center gap-3 p-3 bg-muted rounded-lg">
               <div className="w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-semibold">
                 {ban.user.avatarUrl ? (
-                  <img src={ban.user.avatarUrl} className="w-8 h-8 rounded-full object-cover" alt="" />
+                  <img src={resolveUploadUrl(ban.user.avatarUrl)!} className="w-8 h-8 rounded-full object-cover" alt="" />
                 ) : (
                   ban.user.displayName.charAt(0).toUpperCase()
                 )}

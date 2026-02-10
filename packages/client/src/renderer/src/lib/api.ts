@@ -6,6 +6,10 @@ export class ApiClient {
     this.baseUrl = url.replace(/\/+$/, "");
   }
 
+  getBaseUrl(): string {
+    return this.baseUrl;
+  }
+
   setAccessToken(token: string | null) {
     this.accessToken = token;
   }
@@ -76,3 +80,10 @@ export class ApiError extends Error {
 }
 
 export const api = new ApiClient();
+
+/** Resolve a relative upload path (e.g. /uploads/avatars/x.png) to a full URL */
+export function resolveUploadUrl(path: string | null | undefined): string | null {
+  if (!path) return null;
+  if (path.startsWith("http")) return path;
+  return `${api.getBaseUrl()}${path}`;
+}

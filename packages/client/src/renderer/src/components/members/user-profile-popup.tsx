@@ -1,4 +1,5 @@
 import { X, MessageCircle } from "lucide-react";
+import { resolveUploadUrl } from "@/lib/api";
 import type { ServerMember } from "@nexus/shared";
 import { useAuthStore } from "@/stores/auth";
 import { useDmStore } from "@/stores/dms";
@@ -42,7 +43,7 @@ export function UserProfilePopup({ member, onClose }: UserProfilePopupProps) {
         <div className="px-4 pb-4 -mt-8">
           <div className="w-16 h-16 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xl font-bold border-4 border-card">
             {member.user.avatarUrl ? (
-              <img src={member.user.avatarUrl} className="w-16 h-16 rounded-full object-cover" alt="" />
+              <img src={resolveUploadUrl(member.user.avatarUrl)!} className="w-16 h-16 rounded-full object-cover" alt="" />
             ) : (
               member.user.displayName.charAt(0).toUpperCase()
             )}

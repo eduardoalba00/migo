@@ -21,6 +21,7 @@ import { VoiceUser } from "@/components/voice/voice-user";
 import { UserSettingsModal } from "@/components/settings/user-settings-modal";
 import { ServerSettingsModal } from "@/components/settings/server-settings-modal";
 import { cn } from "@/lib/utils";
+import { resolveUploadUrl } from "@/lib/api";
 import type { Channel, CategoryWithChannels } from "@nexus/shared";
 
 interface ChannelSidebarProps {
@@ -232,7 +233,7 @@ export function ChannelSidebar({ serverId }: ChannelSidebarProps) {
         <div className="flex items-center gap-2 px-3 py-2 border-t border-border bg-card">
           <div className="w-8 h-8 rounded-full bg-sidebar-primary text-sidebar-primary-foreground flex items-center justify-center text-xs font-semibold">
             {user?.avatarUrl ? (
-              <img src={user.avatarUrl} className="w-8 h-8 rounded-full object-cover" alt="" />
+              <img src={resolveUploadUrl(user.avatarUrl)!} className="w-8 h-8 rounded-full object-cover" alt="" />
             ) : (
               user?.displayName?.charAt(0).toUpperCase() || "?"
             )}

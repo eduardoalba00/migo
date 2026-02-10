@@ -3,6 +3,7 @@ import { Send } from "lucide-react";
 import { useDmStore } from "@/stores/dms";
 import { useAuthStore } from "@/stores/auth";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { resolveUploadUrl } from "@/lib/api";
 import { MarkdownRenderer } from "@/components/messages/markdown-renderer";
 
 export function DmView() {
@@ -50,7 +51,7 @@ export function DmView() {
       <div className="flex items-center gap-2 px-4 h-12 border-b-2 border-border">
         <div className="w-6 h-6 rounded-full bg-sidebar-primary text-sidebar-primary-foreground flex items-center justify-center text-xs font-semibold">
           {recipient?.avatarUrl ? (
-            <img src={recipient.avatarUrl} className="w-6 h-6 rounded-full object-cover" alt="" />
+            <img src={resolveUploadUrl(recipient.avatarUrl)!} className="w-6 h-6 rounded-full object-cover" alt="" />
           ) : (
             recipient?.displayName.charAt(0).toUpperCase() || "?"
           )}
@@ -67,7 +68,7 @@ export function DmView() {
               <div key={msg.id} className="flex items-start gap-2">
                 <div className="w-8 h-8 rounded-full bg-sidebar-primary text-sidebar-primary-foreground flex items-center justify-center text-xs font-semibold shrink-0 mt-0.5">
                   {msg.author.avatarUrl ? (
-                    <img src={msg.author.avatarUrl} className="w-8 h-8 rounded-full object-cover" alt="" />
+                    <img src={resolveUploadUrl(msg.author.avatarUrl)!} className="w-8 h-8 rounded-full object-cover" alt="" />
                   ) : (
                     msg.author.displayName.charAt(0).toUpperCase()
                   )}

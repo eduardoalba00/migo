@@ -6,7 +6,7 @@ import { EmojiPicker } from "@/components/messages/emoji-picker";
 import { wsManager } from "@/lib/ws";
 import { WsOpcode, SERVER_ROUTES, buildRoute } from "@nexus/shared";
 import type { ServerMember } from "@nexus/shared";
-import { api } from "@/lib/api";
+import { api, resolveUploadUrl } from "@/lib/api";
 
 interface MessageInputProps {
   channelId: string;
@@ -206,7 +206,7 @@ export function MessageInput({ channelId, channelName }: MessageInputProps) {
               >
                 <div className="w-6 h-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-semibold">
                   {member.user.avatarUrl ? (
-                    <img src={member.user.avatarUrl} className="w-6 h-6 rounded-full object-cover" alt="" />
+                    <img src={resolveUploadUrl(member.user.avatarUrl)!} className="w-6 h-6 rounded-full object-cover" alt="" />
                   ) : (
                     member.user.displayName.charAt(0).toUpperCase()
                   )}

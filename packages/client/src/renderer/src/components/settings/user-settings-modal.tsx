@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { X, User, Lock, Palette, Volume2 } from "lucide-react";
 import { useAuthStore } from "@/stores/auth";
-import { api } from "@/lib/api";
+import { api, resolveUploadUrl } from "@/lib/api";
 import { AUTH_ROUTES, UPLOAD_ROUTES } from "@nexus/shared";
 
 interface UserSettingsModalProps {
@@ -107,7 +107,7 @@ function AccountTab() {
         <div className="relative">
           <div className="w-20 h-20 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-2xl font-bold">
             {user?.avatarUrl ? (
-              <img src={user.avatarUrl} className="w-20 h-20 rounded-full object-cover" alt="" />
+              <img src={resolveUploadUrl(user.avatarUrl)!} className="w-20 h-20 rounded-full object-cover" alt="" />
             ) : (
               user?.displayName?.charAt(0).toUpperCase()
             )}

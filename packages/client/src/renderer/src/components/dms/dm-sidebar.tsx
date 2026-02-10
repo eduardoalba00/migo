@@ -3,6 +3,7 @@ import { MessageCircle } from "lucide-react";
 import { useDmStore } from "@/stores/dms";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
+import { resolveUploadUrl } from "@/lib/api";
 
 export function DmSidebar() {
   const channels = useDmStore((s) => s.channels);
@@ -47,7 +48,7 @@ export function DmSidebar() {
               >
                 <div className="w-8 h-8 rounded-full bg-sidebar-primary text-sidebar-primary-foreground flex items-center justify-center text-xs font-semibold shrink-0">
                   {recipient.avatarUrl ? (
-                    <img src={recipient.avatarUrl} className="w-8 h-8 rounded-full object-cover" alt="" />
+                    <img src={resolveUploadUrl(recipient.avatarUrl)!} className="w-8 h-8 rounded-full object-cover" alt="" />
                   ) : (
                     recipient.displayName.charAt(0).toUpperCase()
                   )}

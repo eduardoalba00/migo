@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { cn } from "@/lib/utils";
+import { resolveUploadUrl } from "@/lib/api";
 import type { ServerMember, UserStatus } from "@nexus/shared";
 import { UserProfilePopup } from "./user-profile-popup";
 
@@ -30,7 +31,7 @@ export function MemberItem({ member, status }: MemberItemProps) {
         <div className="relative">
           <div className="w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-semibold">
             {member.user.avatarUrl ? (
-              <img src={member.user.avatarUrl} className="w-8 h-8 rounded-full object-cover" alt="" />
+              <img src={resolveUploadUrl(member.user.avatarUrl)!} className="w-8 h-8 rounded-full object-cover" alt="" />
             ) : (
               member.user.displayName.charAt(0).toUpperCase()
             )}
