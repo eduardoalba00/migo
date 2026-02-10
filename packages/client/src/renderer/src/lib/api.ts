@@ -16,9 +16,13 @@ export class ApiClient {
 
   async fetch<T>(path: string, options: RequestInit = {}): Promise<T> {
     const headers: Record<string, string> = {
-      "Content-Type": "application/json",
       ...((options.headers as Record<string, string>) || {}),
     };
+
+    // Only set Content-Type when there's a body
+    if (options.body) {
+      headers["Content-Type"] = "application/json";
+    }
 
     if (this.accessToken) {
       headers["Authorization"] = `Bearer ${this.accessToken}`;

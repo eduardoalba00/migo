@@ -38,6 +38,7 @@ export async function buildApp(config: Config, db: AppDatabase) {
   await app.register(rateLimit, {
     max: 100,
     timeWindow: "1 minute",
+    allowList: (req) => req.url === "/ws",
   });
 
   await app.register(multipart, {
