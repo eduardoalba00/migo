@@ -11,10 +11,15 @@ export class WebSocketManager {
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 10;
   private token: string | null = null;
+  private wsUrl: string = "ws://localhost:8080/ws";
   private dispatchHandler: DispatchHandler | null = null;
   private voiceSignalHandler: VoiceSignalHandler | null = null;
   private onStatusChange: ((connected: boolean) => void) | null = null;
   private intentionalClose = false;
+
+  setUrl(url: string) {
+    this.wsUrl = url;
+  }
 
   connect(token: string) {
     this.token = token;
@@ -51,7 +56,7 @@ export class WebSocketManager {
 
     this.cleanup();
 
-    this.ws = new WebSocket("ws://localhost:8080/ws");
+    this.ws = new WebSocket(this.wsUrl);
 
     this.ws.onopen = () => {
       // Send Identify

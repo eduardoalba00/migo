@@ -32,6 +32,9 @@ export async function buildApp(config: Config, db: AppDatabase) {
   // WebSocket setup
   const { pubsub, connectionManager } = await createWsHandler(app, db, authService, config);
 
+  // Health check
+  app.get("/api/health", async () => ({ status: "ok" }));
+
   // Routes
   await app.register(authRoutes(db, authService));
   await app.register(serverRoutes(db, authService, serverService, pubsub));

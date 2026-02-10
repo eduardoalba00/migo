@@ -6,7 +6,11 @@
     "dev:client": "pnpm --filter @nexus/client dev",
     "build:server": "pnpm --filter @nexus/server build",
     "build:client": "pnpm --filter @nexus/client build",
+    "dev:client2": "NEXUS_INSTANCE=2 pnpm --filter @nexus/client dev",
     "db:generate": "pnpm --filter @nexus/server db:generate",
     "db:migrate": "pnpm --filter @nexus/server db:migrate"
+  },
+  "dependencies": {
+    "electron": "^40.2.1"
   }
 }

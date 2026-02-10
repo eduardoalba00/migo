@@ -2,6 +2,10 @@ import { app, shell, BrowserWindow, ipcMain } from "electron";
 import { join } from "path";
 import { is } from "@electron-toolkit/utils";
 
+if (process.env.NEXUS_INSTANCE) {
+  app.setPath("userData", app.getPath("userData") + "-" + process.env.NEXUS_INSTANCE);
+}
+
 function createWindow(): void {
   const mainWindow = new BrowserWindow({
     width: 1200,

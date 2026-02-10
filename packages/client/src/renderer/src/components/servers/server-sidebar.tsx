@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { Plus } from "lucide-react";
+import { Plus, ArrowLeftRight } from "lucide-react";
 import { useServerStore } from "@/stores/servers";
 import { useChannelStore } from "@/stores/channels";
+import { useWorkspaceStore } from "@/stores/workspace";
 import { Separator } from "@/components/ui/separator";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { CreateServerDialog } from "@/components/servers/create-server-dialog";
@@ -15,6 +16,8 @@ export function ServerSidebar() {
   const fetchChannels = useChannelStore((s) => s.fetchChannels);
   const clearChannels = useChannelStore((s) => s.clearChannels);
   const setActiveChannel = useChannelStore((s) => s.setActiveChannel);
+
+  const setActiveWorkspace = useWorkspaceStore((s) => s.setActiveWorkspace);
 
   const [showCreate, setShowCreate] = useState(false);
   const [showJoin, setShowJoin] = useState(false);
@@ -74,6 +77,20 @@ export function ServerSidebar() {
             </button>
           </TooltipTrigger>
           <TooltipContent side="right">Join a server</TooltipContent>
+        </Tooltip>
+
+        <div className="mt-auto" />
+
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              onClick={() => setActiveWorkspace(null)}
+              className="w-12 h-12 rounded-[24px] bg-secondary flex items-center justify-center text-muted-foreground transition-all hover:rounded-[16px] hover:bg-accent hover:text-foreground"
+            >
+              <ArrowLeftRight className="h-5 w-5" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="right">Switch workspace</TooltipContent>
         </Tooltip>
       </div>
 

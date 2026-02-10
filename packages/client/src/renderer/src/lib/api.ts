@@ -1,7 +1,10 @@
-const API_BASE = "http://localhost:8080";
-
 export class ApiClient {
   private accessToken: string | null = null;
+  private baseUrl: string = "http://localhost:8080";
+
+  setBaseUrl(url: string) {
+    this.baseUrl = url.replace(/\/+$/, "");
+  }
 
   setAccessToken(token: string | null) {
     this.accessToken = token;
@@ -17,7 +20,7 @@ export class ApiClient {
       headers["Authorization"] = `Bearer ${this.accessToken}`;
     }
 
-    const response = await fetch(`${API_BASE}${path}`, {
+    const response = await fetch(`${this.baseUrl}${path}`, {
       ...options,
       headers,
     });
