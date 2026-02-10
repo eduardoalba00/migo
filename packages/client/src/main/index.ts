@@ -1,4 +1,4 @@
-import { app, shell, BrowserWindow, ipcMain } from "electron";
+import { app, shell, BrowserWindow, ipcMain, desktopCapturer } from "electron";
 import { join } from "path";
 import { is } from "@electron-toolkit/utils";
 
@@ -49,6 +49,20 @@ function createWindow(): void {
   });
   mainWindow.on("unmaximize", () => {
     mainWindow.webContents.send("window:maximized-change", false);
+  });
+
+  // IPC handler for screen capture sources
+  ipcMain.handle("screen:getSources", async () => {
+    const sources = await desktopCapturer.getSources({
+      types: ["screen", "window"],
+      thumbnailSize: { width: 320, height: 180 },
+    });
+    return sources.map((source) => ({
+      id: source.id,
+      name: source.name,
+      thumbnail: source.thumbnail.toDataURL(),
+      display_id: source.display_id,
+    }));
   });
 
   if (is.dev && process.env["ELECTRON_RENDERER_URL"]) {

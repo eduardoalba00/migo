@@ -9,7 +9,8 @@ export interface VoiceParticipant {
   sendTransport: msTypes.WebRtcTransport | null;
   recvTransport: msTypes.WebRtcTransport | null;
   producer: msTypes.Producer | null;
-  consumers: Map<string, msTypes.Consumer>; // keyed by producer userId
+  screenProducer: msTypes.Producer | null;
+  consumers: Map<string, msTypes.Consumer>; // keyed by producer userId or `${userId}:video`
 }
 
 export class VoiceStateManager {
@@ -46,6 +47,7 @@ export class VoiceStateManager {
         sendTransport: null,
         recvTransport: null,
         producer: null,
+        screenProducer: null,
         consumers: new Map(),
       });
     }
@@ -116,6 +118,7 @@ export class VoiceStateManager {
     if (participant) {
       // Close all mediasoup objects
       participant.producer?.close();
+      participant.screenProducer?.close();
       for (const consumer of participant.consumers.values()) {
         consumer.close();
       }

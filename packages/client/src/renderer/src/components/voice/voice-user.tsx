@@ -1,4 +1,4 @@
-import { MicOff, VolumeX } from "lucide-react";
+import { MicOff, VolumeX, Monitor } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { VoiceChannelUser } from "@nexus/shared";
 
@@ -20,6 +20,7 @@ export function VoiceUser({ user }: VoiceUserProps) {
       <span className="text-sm text-muted-foreground truncate flex-1">
         {user.displayName || user.username}
       </span>
+      {user.screenSharing && <Monitor className="h-3.5 w-3.5 text-green-500 shrink-0" />}
       {user.muted && <MicOff className="h-3.5 w-3.5 text-muted-foreground/60 shrink-0" />}
       {user.deafened && <VolumeX className="h-3.5 w-3.5 text-muted-foreground/60 shrink-0" />}
     </div>

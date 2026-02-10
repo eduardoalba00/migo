@@ -35,6 +35,8 @@ export const DispatchEvent = {
   SPEAKING_UPDATE: "SPEAKING_UPDATE",
   DM_MESSAGE_CREATE: "DM_MESSAGE_CREATE",
   DM_CHANNEL_CREATE: "DM_CHANNEL_CREATE",
+  SCREEN_SHARE_START: "SCREEN_SHARE_START",
+  SCREEN_SHARE_STOP: "SCREEN_SHARE_STOP",
 } as const;
 
 export type DispatchEvent = (typeof DispatchEvent)[keyof typeof DispatchEvent];

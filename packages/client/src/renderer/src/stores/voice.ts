@@ -15,6 +15,12 @@ interface VoiceStoreState {
   isSpeaking: boolean;
   userVolumes: Record<string, number>;
 
+  // Screen sharing
+  isScreenSharing: boolean;
+  screenShareUserId: string | null;
+  screenShareTrack: MediaStreamTrack | null;
+  showScreenSharePicker: boolean;
+
   joinChannel: (channelId: string, serverId: string) => Promise<void>;
   leaveChannel: () => void;
   toggleMute: () => void;
@@ -22,6 +28,11 @@ interface VoiceStoreState {
   handleVoiceStateUpdate: (state: VoiceState) => void;
   getChannelUsers: (channelId: string) => VoiceChannelUser[];
   setUserVolume: (userId: string, volume: number) => void;
+  toggleScreenShare: () => void;
+  startScreenShare: (sourceId: string) => Promise<void>;
+  stopScreenShare: () => void;
+  handleScreenShareStart: (data: { userId: string; channelId: string }) => void;
+  handleScreenShareStop: (data: { userId: string }) => void;
 }
 
 export const useVoiceStore = create<VoiceStoreState>()((set, get) => ({
@@ -33,6 +44,10 @@ export const useVoiceStore = create<VoiceStoreState>()((set, get) => ({
   isConnecting: false,
   isSpeaking: false,
   userVolumes: {},
+  isScreenSharing: false,
+  screenShareUserId: null,
+  screenShareTrack: null,
+  showScreenSharePicker: false,
 
   joinChannel: async (channelId, serverId) => {
     const { currentChannelId } = get();
@@ -50,6 +65,15 @@ export const useVoiceStore = create<VoiceStoreState>()((set, get) => ({
       set({ isSpeaking: speaking });
     });
 
+    // Set up screen share callback
+    voiceManager.setScreenShareCallback((userId, track) => {
+      if (track) {
+        set({ screenShareUserId: userId, screenShareTrack: track });
+      } else {
+        set({ screenShareUserId: null, screenShareTrack: null });
+      }
+    });
+
     try {
       await voiceManager.join(channelId, serverId);
       set({ isConnecting: false });
@@ -64,6 +88,7 @@ export const useVoiceStore = create<VoiceStoreState>()((set, get) => ({
   leaveChannel: () => {
     voiceManager.leave();
     voiceManager.setSpeakingCallback(null);
+    voiceManager.setScreenShareCallback(null);
     playLeaveSound();
     set({
       currentChannelId: null,
@@ -72,6 +97,10 @@ export const useVoiceStore = create<VoiceStoreState>()((set, get) => ({
       isDeafened: false,
       isConnecting: false,
       isSpeaking: false,
+      isScreenSharing: false,
+      screenShareUserId: null,
+      screenShareTrack: null,
+      showScreenSharePicker: false,
     });
   },
 
@@ -158,6 +187,7 @@ export const useVoiceStore = create<VoiceStoreState>()((set, get) => ({
             muted: state.muted,
             deafened: state.deafened,
             speaking: existing?.speaking ?? false,
+            screenSharing: state.screenSharing ?? existing?.screenSharing ?? false,
           },
         };
       }
@@ -182,5 +212,87 @@ export const useVoiceStore = create<VoiceStoreState>()((set, get) => ({
       stored[userId] = volume;
       localStorage.setItem("nexus-user-volumes", JSON.stringify(stored));
     } catch {}
+  },
+
+  toggleScreenShare: () => {
+    const { isScreenSharing, currentChannelId } = get();
+    if (!currentChannelId) return;
+
+    if (isScreenSharing) {
+      get().stopScreenShare();
+    } else {
+      set({ showScreenSharePicker: true });
+    }
+  },
+
+  startScreenShare: async (sourceId: string) => {
+    set({ showScreenSharePicker: false });
+    try {
+      await voiceManager.startScreenShare(sourceId);
+      set({ isScreenSharing: true });
+    } catch (err) {
+      console.error("Failed to start screen share:", err);
+      set({ isScreenSharing: false });
+    }
+  },
+
+  stopScreenShare: () => {
+    voiceManager.stopScreenShare();
+    set({ isScreenSharing: false });
+  },
+
+  handleScreenShareStart: (data: { userId: string; channelId: string }) => {
+    const { currentChannelId, channelUsers } = get();
+    // Update the user's screenSharing status
+    if (data.channelId && channelUsers[data.channelId]?.[data.userId]) {
+      set((s) => ({
+        channelUsers: {
+          ...s.channelUsers,
+          [data.channelId]: {
+            ...s.channelUsers[data.channelId],
+            [data.userId]: {
+              ...s.channelUsers[data.channelId][data.userId],
+              screenSharing: true,
+            },
+          },
+        },
+        // If we're in the same channel, set the screen share user
+        ...(currentChannelId === data.channelId ? { screenShareUserId: data.userId } : {}),
+      }));
+    } else if (currentChannelId === data.channelId) {
+      set({ screenShareUserId: data.userId });
+    }
+  },
+
+  handleScreenShareStop: (data: { userId: string }) => {
+    // Remove video consumer
+    voiceManager.removeVideoConsumer(data.userId);
+
+    set((s) => {
+      const updates: Partial<VoiceStoreState> = {};
+
+      // Clear screen share user if it matches
+      if (s.screenShareUserId === data.userId) {
+        updates.screenShareUserId = null;
+        updates.screenShareTrack = null;
+      }
+
+      // Update channelUsers to clear screenSharing flag
+      const channelUsers = { ...s.channelUsers };
+      for (const chId of Object.keys(channelUsers)) {
+        if (channelUsers[chId]?.[data.userId]) {
+          channelUsers[chId] = {
+            ...channelUsers[chId],
+            [data.userId]: {
+              ...channelUsers[chId][data.userId],
+              screenSharing: false,
+            },
+          };
+        }
+      }
+      updates.channelUsers = channelUsers;
+
+      return updates;
+    });
   },
 }));

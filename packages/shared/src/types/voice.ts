@@ -4,6 +4,7 @@ export interface VoiceState {
   serverId: string;
   muted: boolean;
   deafened: boolean;
+  screenSharing?: boolean;
   /** Included in server→client broadcasts for display purposes */
   username?: string;
   displayName?: string;
@@ -17,7 +18,8 @@ export type VoiceSignalAction =
   | "produce"
   | "createRecvTransport"
   | "consume"
-  | "resumeConsumer";
+  | "resumeConsumer"
+  | "stopScreenShare";
 
 export interface VoiceChannelUser {
   userId: string;
@@ -27,4 +29,5 @@ export interface VoiceChannelUser {
   muted: boolean;
   deafened: boolean;
   speaking: boolean;
+  screenSharing: boolean;
 }

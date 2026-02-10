@@ -13,3 +13,11 @@ const windowAPI = {
 };
 
 contextBridge.exposeInMainWorld("windowAPI", windowAPI);
+
+const screenAPI = {
+  getSources: () => ipcRenderer.invoke("screen:getSources") as Promise<
+    Array<{ id: string; name: string; thumbnail: string; display_id: string }>
+  >,
+};
+
+contextBridge.exposeInMainWorld("screenAPI", screenAPI);

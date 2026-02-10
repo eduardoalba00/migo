@@ -6,7 +6,7 @@
     "dev:client": "pnpm --filter @nexus/client dev",
     "build:server": "pnpm --filter @nexus/server build",
     "build:client": "pnpm --filter @nexus/client build",
-    "dev:client2": "NEXUS_INSTANCE=2 pnpm --filter @nexus/client dev",
+    "dev:client2": "cross-env NEXUS_INSTANCE=2 pnpm --filter @nexus/client dev",
     "db:generate": "pnpm --filter @nexus/server db:generate",
     "db:migrate": "pnpm --filter @nexus/server db:migrate"
   },
@@ -14,6 +14,7 @@
     "electron": "^40.2.1"
   },
   "devDependencies": {
-    "@types/node": "^25.2.3"
+    "@types/node": "^25.2.3",
+    "cross-env": "^10.1.0"
   }
 }

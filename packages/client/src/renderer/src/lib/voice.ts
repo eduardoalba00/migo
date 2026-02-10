@@ -9,6 +9,7 @@ type PendingRequest = {
 };
 
 type SpeakingCallback = (speaking: boolean) => void;
+type ScreenShareCallback = (userId: string, track: MediaStreamTrack | null) => void;
 
 export class VoiceManager {
   private device: Device | null = null;
@@ -16,9 +17,15 @@ export class VoiceManager {
   private recvTransport: msTypes.Transport | null = null;
   private producer: MediaStreamTrack | null = null;
   private consumers = new Map<string, { consumer: msTypes.Consumer; audio: HTMLAudioElement }>();
+  private videoConsumers = new Map<string, { consumer: msTypes.Consumer; video: HTMLVideoElement }>();
   private localStream: MediaStream | null = null;
   private pendingRequests = new Map<string, PendingRequest>();
   private requestCounter = 0;
+
+  // Screen sharing
+  private screenProducer: msTypes.Producer | null = null;
+  private screenStream: MediaStream | null = null;
+  private screenShareCallback: ScreenShareCallback | null = null;
 
   // VAD
   private audioContext: AudioContext | null = null;
@@ -66,6 +73,85 @@ export class VoiceManager {
 
   getUserVolume(userId: string): number {
     return this.userVolumes.get(userId) ?? 1;
+  }
+
+  setScreenShareCallback(cb: ScreenShareCallback | null) {
+    this.screenShareCallback = cb;
+  }
+
+  async startScreenShare(sourceId: string): Promise<void> {
+    if (!this.sendTransport || !this.device) {
+      throw new Error("Not connected to voice");
+    }
+
+    // Capture screen using Electron's chromeMediaSource
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: false,
+      video: {
+        mandatory: {
+          chromeMediaSource: "desktop",
+          chromeMediaSourceId: sourceId,
+          maxWidth: 2560,
+          maxHeight: 1440,
+          maxFrameRate: 60,
+        },
+      } as any,
+    });
+
+    const videoTrack = stream.getVideoTracks()[0];
+    if (!videoTrack) {
+      stream.getTracks().forEach((t) => t.stop());
+      throw new Error("No video track from screen capture");
+    }
+
+    // Listen for track ended (user stops via OS-level controls)
+    videoTrack.addEventListener("ended", () => {
+      this.stopScreenShare();
+    });
+
+    // Find VP9 codec preference
+    const routerCodecs = this.device.rtpCapabilities.codecs ?? [];
+    const vp9Codec = routerCodecs.find((c) => c.mimeType.toLowerCase() === "video/vp9");
+
+    this.screenProducer = await this.sendTransport.produce({
+      track: videoTrack,
+      encodings: [{ maxBitrate: 8_000_000, maxFramerate: 60, scalabilityMode: "L1T3" }],
+      codecOptions: { videoGoogleStartBitrate: 1000 },
+      ...(vp9Codec ? { codec: vp9Codec } : {}),
+    });
+
+    this.screenStream = stream;
+  }
+
+  stopScreenShare(): void {
+    if (this.screenProducer) {
+      if (!this.screenProducer.closed) {
+        this.screenProducer.close();
+      }
+      this.screenProducer = null;
+    }
+
+    if (this.screenStream) {
+      this.screenStream.getTracks().forEach((t) => t.stop());
+      this.screenStream = null;
+    }
+
+    // Tell server we stopped
+    this.signal("stopScreenShare").catch(() => {});
+  }
+
+  get isScreenSharing(): boolean {
+    return this.screenProducer !== null && !this.screenProducer.closed;
+  }
+
+  removeVideoConsumer(userId: string): void {
+    const entry = this.videoConsumers.get(userId);
+    if (entry) {
+      entry.consumer.close();
+      entry.video.srcObject = null;
+      entry.video.remove();
+      this.videoConsumers.delete(userId);
+    }
   }
 
   async join(channelId: string, serverId: string): Promise<void> {
@@ -146,13 +232,31 @@ export class VoiceManager {
   leave(): void {
     this.stopVAD();
 
-    // Close all consumers
+    // Stop screen sharing if active
+    if (this.screenProducer && !this.screenProducer.closed) {
+      this.screenProducer.close();
+    }
+    this.screenProducer = null;
+    if (this.screenStream) {
+      this.screenStream.getTracks().forEach((t) => t.stop());
+      this.screenStream = null;
+    }
+
+    // Close all audio consumers
     for (const { consumer, audio } of this.consumers.values()) {
       consumer.close();
       audio.srcObject = null;
       audio.remove();
     }
     this.consumers.clear();
+
+    // Close all video consumers
+    for (const { consumer, video } of this.videoConsumers.values()) {
+      consumer.close();
+      video.srcObject = null;
+      video.remove();
+    }
+    this.videoConsumers.clear();
 
     // Close transports
     this.sendTransport?.close();
@@ -249,7 +353,7 @@ export class VoiceManager {
     };
   }
 
-  private async consumeProducer(producerId: string, producerUserId: string): Promise<void> {
+  private async consumeProducer(producerId: string, producerUserId: string, kind: "audio" | "video" = "audio"): Promise<void> {
     if (!this.device || !this.recvTransport) return;
 
     const params = await this.signal("consume", {
@@ -267,22 +371,45 @@ export class VoiceManager {
     // Resume the consumer on the server
     await this.signal("resumeConsumer", { consumerId: consumer.id });
 
-    // Play audio
-    const audio = new Audio();
-    audio.srcObject = new MediaStream([consumer.track]);
+    if (kind === "video") {
+      // Handle video (screen share) consumer
+      const video = document.createElement("video");
+      video.srcObject = new MediaStream([consumer.track]);
+      video.autoplay = true;
+      video.playsInline = true;
+      video.style.display = "none";
+      document.body.appendChild(video);
 
-    // Apply per-user volume
-    const vol = this.userVolumes.get(producerUserId) ?? 1;
-    audio.volume = vol;
+      this.videoConsumers.set(producerUserId, { consumer, video });
 
-    // Apply output device
-    if (this.selectedOutputDeviceId && "setSinkId" in audio) {
-      (audio as any).setSinkId(this.selectedOutputDeviceId).catch(() => {});
+      // Notify UI about the new video track
+      this.screenShareCallback?.(producerUserId, consumer.track);
+
+      // When consumer closes, notify UI
+      consumer.on("transportclose", () => {
+        this.screenShareCallback?.(producerUserId, null);
+        this.videoConsumers.delete(producerUserId);
+        video.srcObject = null;
+        video.remove();
+      });
+    } else {
+      // Handle audio consumer (existing behavior)
+      const audio = new Audio();
+      audio.srcObject = new MediaStream([consumer.track]);
+
+      // Apply per-user volume
+      const vol = this.userVolumes.get(producerUserId) ?? 1;
+      audio.volume = vol;
+
+      // Apply output device
+      if (this.selectedOutputDeviceId && "setSinkId" in audio) {
+        (audio as any).setSinkId(this.selectedOutputDeviceId).catch(() => {});
+      }
+
+      audio.play().catch(() => {});
+
+      this.consumers.set(producerUserId, { consumer, audio });
     }
-
-    audio.play().catch(() => {});
-
-    this.consumers.set(producerUserId, { consumer, audio });
   }
 
   private handleSignal(msg: any): void {
@@ -290,7 +417,7 @@ export class VoiceManager {
 
     // Handle server-initiated signals (new producer notification)
     if (requestId === "__newProducer__" && action === "consume") {
-      this.consumeProducer(data.producerId, data.producerUserId);
+      this.consumeProducer(data.producerId, data.producerUserId, data.kind ?? "audio");
       return;
     }
 

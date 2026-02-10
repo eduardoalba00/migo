@@ -1,6 +1,7 @@
-import { Mic, MicOff, Headphones, HeadphoneOff, PhoneOff } from "lucide-react";
+import { Mic, MicOff, Headphones, HeadphoneOff, PhoneOff, Monitor, MonitorOff } from "lucide-react";
 import { useVoiceStore } from "@/stores/voice";
 import { cn } from "@/lib/utils";
+import { ScreenSharePicker } from "./screen-share-picker";
 
 export function VoicePanel() {
   const currentChannelId = useVoiceStore((s) => s.currentChannelId);
@@ -8,9 +9,11 @@ export function VoicePanel() {
   const isMuted = useVoiceStore((s) => s.isMuted);
   const isDeafened = useVoiceStore((s) => s.isDeafened);
   const isSpeaking = useVoiceStore((s) => s.isSpeaking);
+  const isScreenSharing = useVoiceStore((s) => s.isScreenSharing);
   const leaveChannel = useVoiceStore((s) => s.leaveChannel);
   const toggleMute = useVoiceStore((s) => s.toggleMute);
   const toggleDeafen = useVoiceStore((s) => s.toggleDeafen);
+  const toggleScreenShare = useVoiceStore((s) => s.toggleScreenShare);
 
   if (!currentChannelId) return null;
 
@@ -50,6 +53,17 @@ export function VoicePanel() {
           {isDeafened ? <HeadphoneOff className="h-4 w-4" /> : <Headphones className="h-4 w-4" />}
         </button>
         <button
+          onClick={toggleScreenShare}
+          disabled={isConnecting}
+          className={cn(
+            "p-2 rounded-md hover:bg-muted transition-colors",
+            isScreenSharing && "text-green-500 bg-green-500/10",
+          )}
+          title={isScreenSharing ? "Stop Sharing" : "Share Screen"}
+        >
+          {isScreenSharing ? <MonitorOff className="h-4 w-4" /> : <Monitor className="h-4 w-4" />}
+        </button>
+        <button
           onClick={leaveChannel}
           className="p-2 rounded-md hover:bg-destructive/20 text-destructive transition-colors ml-auto"
           title="Disconnect"
@@ -57,6 +71,7 @@ export function VoicePanel() {
           <PhoneOff className="h-4 w-4" />
         </button>
       </div>
+      <ScreenSharePicker />
     </div>
   );
 }

@@ -82,10 +82,23 @@ export function handleLeave(
   connectionManager: ConnectionManager,
   db: AppDatabase,
 ): void {
+  // Check if user was screen sharing before leaving
+  const participant = voiceState.getParticipant(userId);
+  const wasScreenSharing = participant?.screenProducer && !participant.screenProducer.closed;
+
   const result = voiceState.leave(userId);
   if (!result) return;
 
   const { channelId, serverId } = result;
+
+  // Broadcast screen share stop if they were sharing
+  if (wasScreenSharing) {
+    connectionManager.broadcastToServer(serverId, {
+      op: WsOpcode.DISPATCH,
+      t: DispatchEvent.SCREEN_SHARE_STOP,
+      d: { userId, channelId, serverId },
+    });
+  }
 
   // Broadcast leave to server members
   broadcastVoiceState(connectionManager, db, serverId, userId, channelId, true);
@@ -158,30 +171,55 @@ export async function handleVoiceSignal(
           return;
         }
 
+        const produceKind = data.kind === "video" ? "video" : "audio";
         const producer = await participant.sendTransport.produce({
-          kind: "audio",
+          kind: produceKind as any,
           rtpParameters: data.rtpParameters,
         });
 
-        participant.producer = producer;
+        if (produceKind === "video") {
+          participant.screenProducer = producer;
+
+          // Auto-broadcast stop when producer closes
+          producer.on("transportclose", () => {
+            connectionManager.broadcastToServer(participant.serverId, {
+              op: WsOpcode.DISPATCH,
+              t: DispatchEvent.SCREEN_SHARE_STOP,
+              d: { userId, channelId: participant.channelId, serverId: participant.serverId },
+            });
+          });
+
+          // Broadcast screen share start
+          connectionManager.broadcastToServer(participant.serverId, {
+            op: WsOpcode.DISPATCH,
+            t: DispatchEvent.SCREEN_SHARE_START,
+            d: { userId, channelId: participant.channelId, serverId: participant.serverId },
+          });
+        } else {
+          participant.producer = producer;
+        }
+
         sendSignalResponse(socket, requestId, action, { producerId: producer.id });
 
         // Notify other participants to consume this new producer
         notifyNewProducer(
           userId,
           producer.id,
+          produceKind,
           participant.channelId,
           voiceState,
           connectionManager,
         );
 
-        // Notify this user about all existing producers in the channel
-        notifyExistingProducers(
-          userId,
-          participant.channelId,
-          voiceState,
-          connectionManager,
-        );
+        // Notify this user about all existing producers in the channel (only on first audio produce)
+        if (produceKind === "audio") {
+          notifyExistingProducers(
+            userId,
+            participant.channelId,
+            voiceState,
+            connectionManager,
+          );
+        }
         break;
       }
 
@@ -241,6 +279,22 @@ export async function handleVoiceSignal(
         break;
       }
 
+      case "stopScreenShare": {
+        if (participant.screenProducer && !participant.screenProducer.closed) {
+          participant.screenProducer.close();
+        }
+        participant.screenProducer = null;
+
+        connectionManager.broadcastToServer(participant.serverId, {
+          op: WsOpcode.DISPATCH,
+          t: DispatchEvent.SCREEN_SHARE_STOP,
+          d: { userId, channelId: participant.channelId, serverId: participant.serverId },
+        });
+
+        sendSignalResponse(socket, requestId, action, { stopped: true });
+        break;
+      }
+
       default:
         sendSignalResponse(socket, requestId, action, undefined, "Unknown action");
     }
@@ -279,6 +333,7 @@ async function broadcastVoiceState(
 function notifyNewProducer(
   producerUserId: string,
   producerId: string,
+  kind: "audio" | "video",
   channelId: string,
   voiceState: VoiceStateManager,
   connectionManager: ConnectionManager,
@@ -292,7 +347,7 @@ function notifyNewProducer(
       d: {
         requestId: "__newProducer__",
         action: "consume",
-        data: { producerId, producerUserId },
+        data: { producerId, producerUserId, kind },
       },
     });
   }
@@ -307,16 +362,28 @@ function notifyExistingProducers(
   const participants = voiceState.getChannelUsers(channelId);
   for (const p of participants) {
     if (p.userId === userId) continue;
-    if (!p.producer || p.producer.closed) continue;
-    // Tell the new user about this existing producer
-    connectionManager.sendTo(userId, {
-      op: WsOpcode.VOICE_SIGNAL,
-      d: {
-        requestId: "__newProducer__",
-        action: "consume",
-        data: { producerId: p.producer.id, producerUserId: p.userId },
-      },
-    });
+    // Notify about audio producer
+    if (p.producer && !p.producer.closed) {
+      connectionManager.sendTo(userId, {
+        op: WsOpcode.VOICE_SIGNAL,
+        d: {
+          requestId: "__newProducer__",
+          action: "consume",
+          data: { producerId: p.producer.id, producerUserId: p.userId, kind: "audio" },
+        },
+      });
+    }
+    // Notify about screen share (video) producer
+    if (p.screenProducer && !p.screenProducer.closed) {
+      connectionManager.sendTo(userId, {
+        op: WsOpcode.VOICE_SIGNAL,
+        d: {
+          requestId: "__newProducer__",
+          action: "consume",
+          data: { producerId: p.screenProducer.id, producerUserId: p.userId, kind: "video" },
+        },
+      });
+    }
   }
 }
 
@@ -328,6 +395,7 @@ function findProducerOwner(
   const participants = voiceState.getChannelUsers(channelId);
   for (const p of participants) {
     if (p.producer?.id === producerId) return p.userId;
+    if (p.screenProducer?.id === producerId) return p.userId;
   }
   return null;
 }

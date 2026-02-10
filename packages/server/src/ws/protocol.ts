@@ -32,7 +32,7 @@ export function handleConnection(
     }
   }, 10_000);
 
-  socket.on("message", async (raw) => {
+  socket.on("message", async (raw: import("ws").RawData) => {
     let msg: any;
     try {
       msg = JSON.parse(raw.toString());

@@ -1,15 +1,21 @@
 import { useChannelStore } from "@/stores/channels";
 import { useServerStore } from "@/stores/servers";
+import { useVoiceStore } from "@/stores/voice";
 import { ChannelHeader } from "@/components/channels/channel-header";
 import { MessageList } from "@/components/messages/message-list";
 import { MessageInput } from "@/components/messages/message-input";
 import { MembersSidebar } from "@/components/members/members-sidebar";
+import { ScreenShareViewer } from "@/components/voice/screen-share-viewer";
 import { Hash } from "lucide-react";
 
 export function MainContent() {
   const activeServerId = useServerStore((s) => s.activeServerId);
   const activeChannelId = useChannelStore((s) => s.activeChannelId);
   const channelList = useChannelStore((s) => s.channelList);
+  const screenShareTrack = useVoiceStore((s) => s.screenShareTrack);
+  const screenShareUserId = useVoiceStore((s) => s.screenShareUserId);
+  const currentVoiceChannelId = useVoiceStore((s) => s.currentChannelId);
+  const channelUsers = useVoiceStore((s) => s.channelUsers);
 
   // Find the active channel
   let activeChannel = null;
@@ -50,11 +56,26 @@ export function MainContent() {
     );
   }
 
+  // Resolve screen sharer name
+  let sharerName = "";
+  if (screenShareUserId && currentVoiceChannelId) {
+    const users = channelUsers[currentVoiceChannelId];
+    if (users?.[screenShareUserId]) {
+      sharerName = users[screenShareUserId].displayName || users[screenShareUserId].username;
+    }
+  }
+
+  const showScreenShare = screenShareTrack && screenShareUserId;
+
   return (
     <div className="flex flex-1 overflow-hidden">
       <div className="flex flex-1 flex-col overflow-hidden">
         <ChannelHeader channel={activeChannel} />
-        <MessageList channelId={activeChannel.id} channelName={activeChannel.name} />
+        {showScreenShare ? (
+          <ScreenShareViewer track={screenShareTrack} sharerName={sharerName || "Someone"} />
+        ) : (
+          <MessageList channelId={activeChannel.id} channelName={activeChannel.name} />
+        )}
         <MessageInput channelId={activeChannel.id} channelName={activeChannel.name} />
       </div>
       <MembersSidebar serverId={activeServerId} />

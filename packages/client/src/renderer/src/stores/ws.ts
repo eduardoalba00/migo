@@ -114,6 +114,12 @@ export const useWsStore = create<WsState>()((set) => ({
         case DispatchEvent.DM_CHANNEL_CREATE:
           useDmStore.getState().handleDmChannelCreate(event.d as DmChannel);
           break;
+        case DispatchEvent.SCREEN_SHARE_START:
+          useVoiceStore.getState().handleScreenShareStart(event.d as { userId: string; channelId: string });
+          break;
+        case DispatchEvent.SCREEN_SHARE_STOP:
+          useVoiceStore.getState().handleScreenShareStop(event.d as { userId: string });
+          break;
       }
     });
 
