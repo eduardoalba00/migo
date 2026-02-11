@@ -135,4 +135,16 @@
     overflow: hidden;
     user-select: none;
   }
+
+  button:not(:disabled),
+  a,
+  [role="button"],
+  [role="menuitem"],
+  label[for],
+  input[type="checkbox"],
+  input[type="radio"],
+  input[type="color"],
+  select {
+    cursor: pointer;
+  }
 }

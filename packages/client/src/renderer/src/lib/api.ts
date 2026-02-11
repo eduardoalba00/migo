@@ -72,6 +72,29 @@ export class ApiClient {
   async delete<T = void>(path: string): Promise<T> {
     return this.fetch<T>(path, { method: "DELETE" });
   }
+
+  async upload<T>(path: string, formData: FormData): Promise<T> {
+    const headers: Record<string, string> = {
+      "ngrok-skip-browser-warning": "true",
+    };
+
+    if (this.accessToken) {
+      headers["Authorization"] = `Bearer ${this.accessToken}`;
+    }
+
+    const response = await fetch(`${this.baseUrl}${path}`, {
+      method: "POST",
+      headers,
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      throw new ApiError(response.status, body.error || "Upload failed");
+    }
+
+    return response.json();
+  }
 }
 
 export class ApiError extends Error {

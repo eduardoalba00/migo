@@ -4,7 +4,7 @@ import { useMessageStore } from "@/stores/messages";
 import { useServerStore } from "@/stores/servers";
 import { EmojiPicker } from "@/components/messages/emoji-picker";
 import { wsManager } from "@/lib/ws";
-import { WsOpcode, SERVER_ROUTES, buildRoute } from "@migo/shared";
+import { WsOpcode, SERVER_ROUTES, UPLOAD_ROUTES, buildRoute } from "@migo/shared";
 import type { ServerMember } from "@migo/shared";
 import { api, resolveUploadUrl } from "@/lib/api";
 
@@ -19,7 +19,10 @@ export function MessageInput({ channelId, channelName }: MessageInputProps) {
   const replyContext = useMessageStore((s) => s.replyContext);
   const setReplyContext = useMessageStore((s) => s.setReplyContext);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const lastTypingSent = useRef(0);
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [uploading, setUploading] = useState(false);
 
   // Mention autocomplete state
   const [showMentions, setShowMentions] = useState(false);
@@ -52,9 +55,11 @@ export function MessageInput({ channelId, channelName }: MessageInputProps) {
 
   const handleSubmit = async () => {
     const trimmed = content.trim();
-    if (!trimmed) return;
+    if (!trimmed && pendingFiles.length === 0) return;
 
+    const filesToUpload = [...pendingFiles];
     setContent("");
+    setPendingFiles([]);
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
     }
@@ -63,9 +68,26 @@ export function MessageInput({ channelId, channelName }: MessageInputProps) {
     setReplyContext(null);
 
     try {
-      await sendMessage(channelId, trimmed, replyToId);
+      let attachmentIds: string[] | undefined;
+      if (filesToUpload.length > 0) {
+        setUploading(true);
+        try {
+          attachmentIds = await Promise.all(
+            filesToUpload.map(async (file) => {
+              const formData = new FormData();
+              formData.append("attachment", file);
+              const res = await api.upload<{ id: string }>(UPLOAD_ROUTES.UPLOAD, formData);
+              return res.id;
+            }),
+          );
+        } finally {
+          setUploading(false);
+        }
+      }
+      await sendMessage(channelId, trimmed || "", replyToId, attachmentIds);
     } catch {
       setContent(trimmed);
+      setPendingFiles(filesToUpload);
     }
   };
 
@@ -161,6 +183,17 @@ export function MessageInput({ channelId, channelName }: MessageInputProps) {
     }
   };
 
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      setPendingFiles((prev) => [...prev, ...Array.from(e.target.files!)]);
+    }
+    e.target.value = "";
+  };
+
+  const removePendingFile = (index: number) => {
+    setPendingFiles((prev) => prev.filter((_, i) => i !== index));
+  };
+
   const handleEmojiInsert = (emoji: string) => {
     const textarea = textareaRef.current;
     if (textarea) {
@@ -217,30 +250,61 @@ export function MessageInput({ channelId, channelName }: MessageInputProps) {
             ))}
           </div>
         )}
-        <div className="absolute top-7 left-4">
-          <div className="w-7 h-7 rounded-full bg-muted-foreground/20 flex items-center justify-center">
-            <Plus className="h-4 w-4 text-muted-foreground" />
+        {pendingFiles.length > 0 && (
+          <div className="flex flex-wrap gap-2 px-4 py-2 mb-1 bg-muted/50 rounded-t-lg">
+            {pendingFiles.map((file, i) => (
+              <div
+                key={`${file.name}-${i}`}
+                className="flex items-center gap-1.5 px-2 py-1 bg-background rounded text-xs border border-border"
+              >
+                <Paperclip className="h-3 w-3 text-muted-foreground shrink-0" />
+                <span className="truncate max-w-[150px]">{file.name}</span>
+                <button
+                  onClick={() => removePendingFile(i)}
+                  className="text-muted-foreground hover:text-foreground ml-0.5"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            ))}
           </div>
-        </div>
-        <textarea
-          ref={textareaRef}
-          value={content}
-          onChange={handleChange}
-          onKeyDown={handleKeyDown}
-          onInput={handleInput}
-          placeholder={channelName ? `Message #${channelName}` : "Send a message..."}
-          className="w-full px-14 py-3 bg-muted/50 border-none rounded-lg text-sm resize-none outline-none max-h-[200px] placeholder:text-muted-foreground"
-          rows={1}
+        )}
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          className="hidden"
+          onChange={handleFileSelect}
         />
-        <div className="absolute top-7 right-4 flex items-center gap-1">
-          <EmojiPicker onSelect={handleEmojiInsert} />
-          <button
-            onClick={handleSubmit}
-            disabled={!content.trim()}
-            className="text-muted-foreground hover:text-foreground disabled:opacity-30 transition-colors"
-          >
-            <SendHorizontal className="h-5 w-5" />
-          </button>
+        <div className={`flex items-center bg-muted/50 ${pendingFiles.length > 0 ? "rounded-b-lg" : "rounded-lg"}`}>
+          <div className="flex items-center px-3 pb-3 pt-3">
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="w-7 h-7 rounded-full bg-muted-foreground/20 flex items-center justify-center hover:bg-muted-foreground/30 transition-colors"
+            >
+              <Plus className="h-4 w-4 text-muted-foreground" />
+            </button>
+          </div>
+          <textarea
+            ref={textareaRef}
+            value={content}
+            onChange={handleChange}
+            onKeyDown={handleKeyDown}
+            onInput={handleInput}
+            placeholder={channelName ? `Message #${channelName}` : "Send a message..."}
+            className="flex-1 py-3 bg-transparent border-none text-sm resize-none outline-none max-h-[200px] placeholder:text-muted-foreground"
+            rows={1}
+          />
+          <div className="flex items-center gap-1 px-3 pb-3 pt-3">
+            <EmojiPicker onSelect={handleEmojiInsert} />
+            <button
+              onClick={handleSubmit}
+              disabled={(!content.trim() && pendingFiles.length === 0) || uploading}
+              className="text-muted-foreground hover:text-foreground disabled:opacity-30 transition-colors"
+            >
+              <SendHorizontal className="h-5 w-5" />
+            </button>
+          </div>
         </div>
       </div>
     </div>

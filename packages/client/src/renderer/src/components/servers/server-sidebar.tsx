@@ -5,7 +5,11 @@ import { useChannelStore } from "@/stores/channels";
 import { useWorkspaceStore } from "@/stores/workspace";
 import { useDmStore } from "@/stores/dms";
 import { Separator } from "@/components/ui/separator";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { CreateServerDialog } from "@/components/servers/create-server-dialog";
 import { JoinServerDialog } from "@/components/servers/join-server-dialog";
 import { cn } from "@/lib/utils";
@@ -43,7 +47,7 @@ export function ServerSidebar() {
 
   return (
     <>
-      <div className="flex flex-col items-center w-[72px] bg-sidebar py-3 gap-2 overflow-y-auto">
+      <div className="flex flex-col items-center w-[64px] bg-sidebar py-3 gap-2 overflow-y-auto">
         {/* DM button */}
         <Tooltip>
           <TooltipTrigger asChild>
@@ -51,16 +55,17 @@ export function ServerSidebar() {
               <div
                 className={cn(
                   "absolute left-0 bg-sidebar-primary rounded-r-full w-[4px] transition-all",
-                  isDmMode ? "h-[36px]" : "h-[8px] group-hover:h-[20px]",
+                  isDmMode ? "h-[32px]" : "h-[8px] group-hover:h-[18px]",
                   !isDmMode && "opacity-0 group-hover:opacity-100",
                 )}
               />
               <button
                 onClick={handleDmsClick}
                 className={cn(
-                  "relative h-[48px] w-[48px] rounded-[24px] bg-card flex items-center justify-center text-foreground transition-all",
-                  "hover:rounded-[16px] hover:bg-sidebar-primary hover:text-sidebar-primary-foreground",
-                  isDmMode && "rounded-[16px] bg-sidebar-primary text-sidebar-primary-foreground",
+                  "relative h-[42px] w-[42px] rounded-[12px] bg-card flex items-center justify-center text-foreground transition-all",
+                  "hover:rounded-[8px] hover:bg-sidebar-primary hover:text-sidebar-primary-foreground",
+                  isDmMode &&
+                    "rounded-[8px] bg-sidebar-primary text-sidebar-primary-foreground",
                 )}
               >
                 <MessageCircle className="h-5 w-5" />
@@ -69,8 +74,6 @@ export function ServerSidebar() {
           </TooltipTrigger>
           <TooltipContent side="right">Direct Messages</TooltipContent>
         </Tooltip>
-
-        <Separator className="w-8 my-1" />
 
         {servers.map((server) => {
           const isActive = activeServerId === server.id;
@@ -82,18 +85,17 @@ export function ServerSidebar() {
                   <div
                     className={cn(
                       "absolute left-0 bg-sidebar-primary rounded-r-full w-[4px] transition-all",
-                      isActive
-                        ? "h-[36px]"
-                        : "h-[8px] group-hover:h-[20px]",
+                      isActive ? "h-[32px]" : "h-[8px] group-hover:h-[18px]",
                       !isActive && "opacity-0 group-hover:opacity-100",
                     )}
                   />
                   <button
                     onClick={() => handleServerClick(server.id)}
                     className={cn(
-                      "relative h-[48px] w-[48px] rounded-[24px] bg-card flex items-center justify-center text-foreground font-semibold text-lg transition-all",
-                      "hover:rounded-[16px] hover:bg-sidebar-primary hover:text-sidebar-primary-foreground",
-                      isActive && "rounded-[16px] bg-sidebar-primary text-sidebar-primary-foreground",
+                      "relative h-[42px] w-[42px] rounded-[12px] bg-card flex items-center justify-center text-foreground font-semibold text-lg transition-all",
+                      "hover:rounded-[8px] hover:bg-sidebar-primary hover:text-sidebar-primary-foreground",
+                      isActive &&
+                        "rounded-[8px] bg-sidebar-primary text-sidebar-primary-foreground",
                     )}
                   >
                     {server.name.charAt(0).toUpperCase()}
@@ -105,14 +107,12 @@ export function ServerSidebar() {
           );
         })}
 
-        <Separator className="w-8 my-1" />
-
         <Tooltip>
           <TooltipTrigger asChild>
             <div className="group relative flex items-center justify-center w-full">
               <button
                 onClick={() => setShowCreate(true)}
-                className="h-[48px] w-[48px] rounded-[24px] bg-card flex items-center justify-center text-green-500 transition-all hover:rounded-[16px] hover:bg-green-500 hover:text-white"
+                className="h-[42px] w-[42px] rounded-[12px] bg-card flex items-center justify-center text-green-500 transition-all hover:rounded-[8px] hover:bg-green-500 hover:text-white"
               >
                 <Plus className="h-6 w-6" />
               </button>
@@ -126,7 +126,7 @@ export function ServerSidebar() {
             <div className="group relative flex items-center justify-center w-full">
               <button
                 onClick={() => setShowJoin(true)}
-                className="h-[48px] w-[48px] rounded-[24px] bg-card flex items-center justify-center text-green-500 transition-all hover:rounded-[16px] hover:bg-green-500 hover:text-white text-sm font-bold"
+                className="h-[42px] w-[42px] rounded-[12px] bg-card flex items-center justify-center text-green-500 transition-all hover:rounded-[8px] hover:bg-green-500 hover:text-white text-sm font-bold"
               >
                 Join
               </button>
@@ -142,7 +142,7 @@ export function ServerSidebar() {
             <div className="group relative flex items-center justify-center w-full">
               <button
                 onClick={() => setActiveWorkspace(null)}
-                className="h-[48px] w-[48px] rounded-[24px] bg-card flex items-center justify-center text-muted-foreground transition-all hover:rounded-[16px] hover:bg-sidebar-accent hover:text-foreground"
+                className="h-[42px] w-[42px] rounded-[12px] bg-card flex items-center justify-center text-muted-foreground transition-all hover:rounded-[8px] hover:bg-sidebar-accent hover:text-foreground"
               >
                 <ArrowLeftRight className="h-5 w-5" />
               </button>

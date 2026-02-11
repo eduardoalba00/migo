@@ -13,7 +13,7 @@ export function Titlebar() {
   }, []);
 
   return (
-    <div className="flex h-8 items-center justify-between bg-sidebar border-b border-sidebar-border text-sidebar-foreground select-none">
+    <div className="flex h-8 items-center justify-between bg-background text-foreground select-none">
       <div
         className="flex-1 h-full flex items-center px-3 text-xs font-medium text-muted-foreground"
         style={{ WebkitAppRegion: "drag" } as React.CSSProperties}

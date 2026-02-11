@@ -219,7 +219,7 @@ export class VoiceManager {
     // Get microphone with selected device
     const audioConstraints: MediaTrackConstraints = this.selectedInputDeviceId
       ? { deviceId: { exact: this.selectedInputDeviceId } }
-      : true;
+      : {};
     this.localStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
     const audioTrack = this.localStream.getAudioTracks()[0];
     this.producer = audioTrack;

@@ -28,7 +28,7 @@ export function SearchDialog({ serverId, open, onOpenChange }: SearchDialogProps
   const [isSearching, setIsSearching] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const setActiveChannel = useChannelStore((s) => s.setActiveChannel);
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   useEffect(() => {
     if (open) {
