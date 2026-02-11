@@ -22,3 +22,4 @@ publish:
   provider: github
   owner: eduardoalba00
   repo: nexus
+  releaseType: release
