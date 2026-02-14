@@ -1,6 +1,6 @@
 {
   "name": "@migo/client",
-  "version": "0.12.2",
+  "version": "0.12.3",
   "private": true,
   "type": "module",
   "main": "./out/main/index.js",
