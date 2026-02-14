@@ -1,6 +1,7 @@
 import { MicOff, VolumeX, Monitor } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useVoiceStore } from "@/stores/voice";
+import { resolveUploadUrl } from "@/lib/api";
 import type { VoiceChannelUser } from "@migo/shared";
 
 interface VoiceUserProps {
@@ -9,16 +10,21 @@ interface VoiceUserProps {
 
 export function VoiceUser({ user }: VoiceUserProps) {
   const speaking = useVoiceStore((s) => s.speakingUsers.has(user.userId));
+  const avatarSrc = resolveUploadUrl(user.avatarUrl);
 
   return (
     <div className="flex items-center gap-2 px-2 py-0.5">
       <div
         className={cn(
-          "w-6 h-6 rounded-full bg-sidebar-primary/60 flex items-center justify-center text-[10px] font-semibold ring-2 transition-colors duration-200",
+          "w-6 h-6 rounded-full bg-sidebar-primary/60 flex items-center justify-center text-[10px] font-semibold ring-2 transition-colors duration-200 shrink-0 overflow-hidden",
           speaking ? "ring-green-500" : "ring-transparent",
         )}
       >
-        {user.displayName?.charAt(0).toUpperCase() || user.username?.charAt(0).toUpperCase() || "?"}
+        {avatarSrc ? (
+          <img src={avatarSrc} className="w-6 h-6 rounded-full object-cover" alt="" />
+        ) : (
+          user.displayName?.charAt(0).toUpperCase() || user.username?.charAt(0).toUpperCase() || "?"
+        )}
       </div>
       <span className="text-sm text-muted-foreground truncate flex-1">
         {user.displayName || user.username}
