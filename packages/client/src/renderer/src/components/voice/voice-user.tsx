@@ -1,5 +1,6 @@
 import { MicOff, VolumeX, Monitor } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useVoiceStore } from "@/stores/voice";
 import type { VoiceChannelUser } from "@migo/shared";
 
 interface VoiceUserProps {
@@ -7,12 +8,14 @@ interface VoiceUserProps {
 }
 
 export function VoiceUser({ user }: VoiceUserProps) {
+  const speaking = useVoiceStore((s) => s.speakingUsers.has(user.userId));
+
   return (
     <div className="flex items-center gap-2 px-2 py-0.5">
       <div
         className={cn(
-          "w-6 h-6 rounded-full bg-sidebar-primary/60 flex items-center justify-center text-[10px] font-semibold ring-2 transition-colors",
-          user.speaking ? "ring-green-500" : "ring-transparent",
+          "w-6 h-6 rounded-full bg-sidebar-primary/60 flex items-center justify-center text-[10px] font-semibold ring-2 transition-colors duration-200",
+          speaking ? "ring-green-500" : "ring-transparent",
         )}
       >
         {user.displayName?.charAt(0).toUpperCase() || user.username?.charAt(0).toUpperCase() || "?"}

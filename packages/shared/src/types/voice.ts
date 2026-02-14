@@ -11,15 +11,12 @@ export interface VoiceState {
   avatarUrl?: string | null;
 }
 
-export type VoiceSignalAction =
-  | "routerRtpCapabilities"
-  | "createSendTransport"
-  | "connectTransport"
-  | "produce"
-  | "createRecvTransport"
-  | "consume"
-  | "resumeConsumer"
-  | "stopScreenShare";
+export type VoiceSignalAction = "joinVoice";
+
+export interface LiveKitCredentials {
+  token: string;
+  url: string;
+}
 
 export interface VoiceChannelUser {
   userId: string;

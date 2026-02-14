@@ -1,6 +1,8 @@
 import { create } from "zustand";
+import { WsOpcode } from "@migo/shared";
 import type { VoiceState, VoiceChannelUser } from "@migo/shared";
-import { voiceManager } from "@/lib/voice";
+import { livekitManager } from "@/lib/livekit";
+import { wsManager } from "@/lib/ws";
 import { playJoinSound, playLeaveSound, playMuteSound, playUnmuteSound } from "@/lib/sounds";
 import { useMemberStore } from "./members";
 
@@ -12,7 +14,7 @@ interface VoiceStoreState {
   isMuted: boolean;
   isDeafened: boolean;
   isConnecting: boolean;
-  isSpeaking: boolean;
+  speakingUsers: Set<string>;
   userVolumes: Record<string, number>;
 
   // Screen sharing
@@ -35,6 +37,41 @@ interface VoiceStoreState {
   handleScreenShareStop: (data: { userId: string }) => void;
 }
 
+// Helper to signal the server and wait for a response
+function voiceSignal(action: string, data?: any): Promise<any> {
+  const requestId = `req_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+  return new Promise((resolve, reject) => {
+    const handler = (msg: any) => {
+      if (msg.d?.requestId === requestId) {
+        wsManager.setVoiceSignalHandler(originalHandler);
+        if (msg.d.error) {
+          reject(new Error(msg.d.error));
+        } else {
+          resolve(msg.d.data);
+        }
+      }
+    };
+
+    const originalHandler = (wsManager as any).voiceSignalHandler;
+    const wrappedHandler = (msg: any) => {
+      handler(msg);
+      originalHandler?.(msg);
+    };
+    wsManager.setVoiceSignalHandler(wrappedHandler);
+
+    wsManager.send({
+      op: WsOpcode.VOICE_SIGNAL,
+      d: { requestId, action, data },
+    });
+
+    setTimeout(() => {
+      wsManager.setVoiceSignalHandler(originalHandler);
+      reject(new Error(`Voice signal timeout: ${action}`));
+    }, 10_000);
+  });
+}
+
 export const useVoiceStore = create<VoiceStoreState>()((set, get) => ({
   currentChannelId: null,
   currentServerId: null,
@@ -42,7 +79,7 @@ export const useVoiceStore = create<VoiceStoreState>()((set, get) => ({
   isMuted: false,
   isDeafened: false,
   isConnecting: false,
-  isSpeaking: false,
+  speakingUsers: new Set<string>(),
   userVolumes: {},
   isScreenSharing: false,
   screenShareUserId: null,
@@ -60,13 +97,12 @@ export const useVoiceStore = create<VoiceStoreState>()((set, get) => ({
 
     set({ isConnecting: true, currentChannelId: channelId, currentServerId: serverId });
 
-    // Set up speaking callback before joining
-    voiceManager.setSpeakingCallback((speaking) => {
-      set({ isSpeaking: speaking });
+    // Set up LiveKit callbacks
+    livekitManager.setSpeakingCallback((speakers) => {
+      set({ speakingUsers: speakers });
     });
 
-    // Set up screen share callback
-    voiceManager.setScreenShareCallback((userId, track) => {
+    livekitManager.setScreenShareCallback((userId, track) => {
       if (track) {
         set({ screenShareUserId: userId, screenShareTrack: track });
       } else {
@@ -75,20 +111,42 @@ export const useVoiceStore = create<VoiceStoreState>()((set, get) => ({
     });
 
     try {
-      await voiceManager.join(channelId, serverId);
+      // 1. Send VOICE_STATE_UPDATE to register with server
+      wsManager.send({
+        op: WsOpcode.VOICE_STATE_UPDATE,
+        d: { channelId, serverId },
+      });
+
+      // 2. Request LiveKit credentials
+      const credentials = await voiceSignal("joinVoice", { channelId, serverId });
+
+      // 3. Connect to LiveKit room
+      await livekitManager.connect(credentials.token, credentials.url);
+
+      // 4. Enable mic
+      await livekitManager.setMicEnabled(true);
+
       set({ isConnecting: false });
       playJoinSound();
     } catch (err) {
       console.error("Failed to join voice channel:", err);
       set({ isConnecting: false, currentChannelId: null, currentServerId: null });
-      voiceManager.setSpeakingCallback(null);
+      livekitManager.setSpeakingCallback(null);
+      livekitManager.setScreenShareCallback(null);
     }
   },
 
   leaveChannel: () => {
-    voiceManager.leave();
-    voiceManager.setSpeakingCallback(null);
-    voiceManager.setScreenShareCallback(null);
+    livekitManager.disconnect();
+    livekitManager.setSpeakingCallback(null);
+    livekitManager.setScreenShareCallback(null);
+
+    // Tell server we left
+    wsManager.send({
+      op: WsOpcode.VOICE_STATE_UPDATE,
+      d: { channelId: null, serverId: "" },
+    });
+
     playLeaveSound();
     set({
       currentChannelId: null,
@@ -96,7 +154,7 @@ export const useVoiceStore = create<VoiceStoreState>()((set, get) => ({
       isMuted: false,
       isDeafened: false,
       isConnecting: false,
-      isSpeaking: false,
+      speakingUsers: new Set(),
       isScreenSharing: false,
       screenShareUserId: null,
       screenShareTrack: null,
@@ -107,10 +165,10 @@ export const useVoiceStore = create<VoiceStoreState>()((set, get) => ({
   toggleMute: () => {
     const { isMuted } = get();
     if (isMuted) {
-      voiceManager.unmute();
+      livekitManager.setMicEnabled(true);
       playUnmuteSound();
     } else {
-      voiceManager.mute();
+      livekitManager.setMicEnabled(false);
       playMuteSound();
     }
     set({ isMuted: !isMuted });
@@ -118,11 +176,7 @@ export const useVoiceStore = create<VoiceStoreState>()((set, get) => ({
 
   toggleDeafen: () => {
     const { isDeafened } = get();
-    if (isDeafened) {
-      voiceManager.undeafen();
-    } else {
-      voiceManager.deafen();
-    }
+    livekitManager.setDeafened(!isDeafened);
     set({ isDeafened: !isDeafened });
   },
 
@@ -202,7 +256,7 @@ export const useVoiceStore = create<VoiceStoreState>()((set, get) => ({
   },
 
   setUserVolume: (userId, volume) => {
-    voiceManager.setUserVolume(userId, volume);
+    livekitManager.setUserVolume(userId, volume);
     set((s) => ({
       userVolumes: { ...s.userVolumes, [userId]: volume },
     }));
@@ -228,7 +282,7 @@ export const useVoiceStore = create<VoiceStoreState>()((set, get) => ({
   startScreenShare: async (sourceId: string) => {
     set({ showScreenSharePicker: false });
     try {
-      await voiceManager.startScreenShare(sourceId);
+      await livekitManager.setScreenShareEnabled(true, sourceId);
       set({ isScreenSharing: true });
     } catch (err) {
       console.error("Failed to start screen share:", err);
@@ -237,7 +291,7 @@ export const useVoiceStore = create<VoiceStoreState>()((set, get) => ({
   },
 
   stopScreenShare: () => {
-    voiceManager.stopScreenShare();
+    livekitManager.setScreenShareEnabled(false);
     set({ isScreenSharing: false });
   },
 
@@ -265,9 +319,6 @@ export const useVoiceStore = create<VoiceStoreState>()((set, get) => ({
   },
 
   handleScreenShareStop: (data: { userId: string }) => {
-    // Remove video consumer
-    voiceManager.removeVideoConsumer(data.userId);
-
     set((s) => {
       const updates: Partial<VoiceStoreState> = {};
 

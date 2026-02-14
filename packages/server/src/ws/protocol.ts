@@ -7,7 +7,7 @@ import { serverMembers } from "../db/schema/servers.js";
 import { channels } from "../db/schema/channels.js";
 import { users } from "../db/schema/users.js";
 import type { ConnectionManager } from "./connection.js";
-import type { MediasoupManager } from "../voice/mediasoup-manager.js";
+import type { LiveKitService } from "../voice/livekit.js";
 import type { VoiceStateManager } from "../voice/state.js";
 import { handleVoiceStateUpdate, handleVoiceSignal, handleLeave } from "../voice/protocol.js";
 
@@ -19,7 +19,7 @@ export function handleConnection(
   db: AppDatabase,
   authService: AuthService,
   connectionManager: ConnectionManager,
-  mediasoupManager: MediasoupManager,
+  livekitService: LiveKitService,
   voiceStateManager: VoiceStateManager,
 ) {
   let userId: string | null = null;
@@ -141,12 +141,12 @@ export function handleConnection(
     }
 
     if (msg.op === WsOpcode.VOICE_STATE_UPDATE && identified && userId) {
-      handleVoiceStateUpdate(socket, userId, msg, mediasoupManager, voiceStateManager, connectionManager, db);
+      handleVoiceStateUpdate(socket, userId, msg, livekitService, voiceStateManager, connectionManager, db);
       return;
     }
 
     if (msg.op === WsOpcode.VOICE_SIGNAL && identified && userId) {
-      handleVoiceSignal(socket, userId, msg, mediasoupManager, voiceStateManager, connectionManager);
+      handleVoiceSignal(socket, userId, msg, livekitService, voiceStateManager);
       return;
     }
 
@@ -217,7 +217,7 @@ export function handleConnection(
       }
 
       // Auto-leave voice channel on disconnect
-      handleLeave(userId, mediasoupManager, voiceStateManager, connectionManager, db);
+      handleLeave(userId, voiceStateManager, connectionManager, db);
       connectionManager.remove(userId);
     }
   });

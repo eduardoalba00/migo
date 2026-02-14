@@ -6,7 +6,7 @@ import type { Config } from "../config.js";
 import { PubSub } from "./pubsub.js";
 import { ConnectionManager } from "./connection.js";
 import { handleConnection } from "./protocol.js";
-import { MediasoupManager } from "../voice/mediasoup-manager.js";
+import { LiveKitService } from "../voice/livekit.js";
 import { VoiceStateManager } from "../voice/state.js";
 
 export async function createWsHandler(
@@ -18,15 +18,14 @@ export async function createWsHandler(
   const pubsub = new PubSub();
   const connectionManager = new ConnectionManager(pubsub);
 
-  const mediasoupManager = new MediasoupManager(config);
-  await mediasoupManager.init();
+  const livekitService = new LiveKitService(config);
 
   const voiceStateManager = new VoiceStateManager();
 
   await app.register(websocket);
 
   app.get("/ws", { websocket: true }, (socket) => {
-    handleConnection(socket, db, authService, connectionManager, mediasoupManager, voiceStateManager);
+    handleConnection(socket, db, authService, connectionManager, livekitService, voiceStateManager);
   });
 
   return { pubsub, connectionManager };

@@ -1,5 +1,6 @@
 import { Mic, MicOff, Headphones, HeadphoneOff, PhoneOff, Monitor, MonitorOff } from "lucide-react";
 import { useVoiceStore } from "@/stores/voice";
+import { useAuthStore } from "@/stores/auth";
 import { cn } from "@/lib/utils";
 import { ScreenSharePicker } from "./screen-share-picker";
 
@@ -8,7 +9,9 @@ export function VoicePanel() {
   const isConnecting = useVoiceStore((s) => s.isConnecting);
   const isMuted = useVoiceStore((s) => s.isMuted);
   const isDeafened = useVoiceStore((s) => s.isDeafened);
-  const isSpeaking = useVoiceStore((s) => s.isSpeaking);
+  const speakingUsers = useVoiceStore((s) => s.speakingUsers);
+  const userId = useAuthStore((s) => s.user?.id);
+  const isSpeaking = userId ? speakingUsers.has(userId) : false;
   const isScreenSharing = useVoiceStore((s) => s.isScreenSharing);
   const leaveChannel = useVoiceStore((s) => s.leaveChannel);
   const toggleMute = useVoiceStore((s) => s.toggleMute);

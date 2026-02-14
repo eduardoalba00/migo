@@ -1,16 +1,10 @@
-import type { types as msTypes } from "mediasoup";
-
 export interface VoiceParticipant {
   userId: string;
   channelId: string;
   serverId: string;
   muted: boolean;
   deafened: boolean;
-  sendTransport: msTypes.WebRtcTransport | null;
-  recvTransport: msTypes.WebRtcTransport | null;
-  producer: msTypes.Producer | null;
-  screenProducer: msTypes.Producer | null;
-  consumers: Map<string, msTypes.Consumer>; // keyed by producer userId or `${userId}:video`
+  screenSharing: boolean;
 }
 
 export class VoiceStateManager {
@@ -44,11 +38,7 @@ export class VoiceStateManager {
         serverId,
         muted: false,
         deafened: false,
-        sendTransport: null,
-        recvTransport: null,
-        producer: null,
-        screenProducer: null,
-        consumers: new Map(),
+        screenSharing: false,
       });
     }
 
@@ -113,18 +103,6 @@ export class VoiceStateManager {
   private removeFromChannel(userId: string, channelId: string): void {
     const channelUsers = this.channels.get(channelId);
     if (!channelUsers) return;
-
-    const participant = channelUsers.get(userId);
-    if (participant) {
-      // Close all mediasoup objects
-      participant.producer?.close();
-      participant.screenProducer?.close();
-      for (const consumer of participant.consumers.values()) {
-        consumer.close();
-      }
-      participant.sendTransport?.close();
-      participant.recvTransport?.close();
-    }
 
     channelUsers.delete(userId);
     this.userChannels.delete(userId);

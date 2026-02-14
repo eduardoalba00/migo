@@ -28,7 +28,7 @@ No test framework is configured yet.
 
 **pnpm monorepo** with three packages:
 
-- **`@migo/server`** — Fastify 5 REST API + WebSocket server. SQLite via Drizzle ORM + libsql. Voice via mediasoup SFU. Auth via argon2 + JWT (jose).
+- **`@migo/server`** — Fastify 5 REST API + WebSocket server. SQLite via Drizzle ORM + libsql. Voice via LiveKit (token service). Auth via argon2 + JWT (jose).
 - **`@migo/client`** — Electron 40 desktop app. React 19 renderer built with electron-vite. State management with Zustand. Styling with Tailwind CSS 4 (OKLCH color tokens). UI primitives from Radix UI.
 - **`@migo/shared`** — Zod schemas, TypeScript types, and API route constants shared between client and server.
 
@@ -45,16 +45,16 @@ The shared package uses a custom export condition `@migo/source` so dev tools (t
 | `services/` | Business logic (auth token management, server membership checks) |
 | `middleware/` | Bearer token auth extraction |
 | `ws/` | WebSocket protocol: connection registry, opcode handler, EventEmitter-based pubsub |
-| `voice/` | Mediasoup SFU manager, voice state tracking, WebRTC signaling |
+| `voice/` | LiveKit token service, voice state tracking |
 
-Config is env-based (`config.ts`): `PORT`, `HOST`, `DATABASE_PATH`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `RTC_MIN_PORT`, `RTC_MAX_PORT`, `RTC_ANNOUNCED_IP`. Defaults work for local dev (auto-generated JWT secrets, `./migo.db`).
+Config is env-based (`config.ts`): `PORT`, `HOST`, `DATABASE_PATH`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`. Defaults work for local dev (auto-generated JWT secrets, `./migo.db`). LiveKit dev server: `docker run --rm -p 7880:7880 -p 7881:7881 -p 7882:7882/udp livekit/livekit-server --dev --bind 0.0.0.0`.
 
 ### Client structure (`packages/client/src/renderer/src/`)
 
 | Directory | Purpose |
 |-----------|---------|
 | `stores/` | Zustand stores (auth, workspace, servers, channels, messages, voice, ws) |
-| `lib/` | HTTP client (`api.ts`), WebSocket manager (`ws.ts`), mediasoup client (`voice.ts`) |
+| `lib/` | HTTP client (`api.ts`), WebSocket manager (`ws.ts`), LiveKit client (`livekit.ts`) |
 | `components/` | React components organized by domain (auth, servers, channels, messages, voice, layout, ui) |
 | `pages/` | Top-level views: auth, workspace picker, app shell |
 
