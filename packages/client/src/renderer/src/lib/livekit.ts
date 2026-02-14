@@ -147,22 +147,24 @@ export class LiveKitManager {
 
   setOutputDevice(deviceId: string | null): void {
     this.selectedOutputDeviceId = deviceId;
-    if (deviceId) {
-      for (const elements of this.attachedAudioElements.values()) {
-        for (const el of elements) {
-          if ("setSinkId" in el) {
-            (el as any).setSinkId(deviceId).catch(() => {});
-          }
+    const sinkId = deviceId || "";
+    for (const elements of this.attachedAudioElements.values()) {
+      for (const el of elements) {
+        if ("setSinkId" in el) {
+          (el as any).setSinkId(sinkId).catch(() => {});
         }
       }
-      this.room?.switchActiveDevice("audiooutput", deviceId).catch(() => {});
     }
+    this.room?.switchActiveDevice("audiooutput", deviceId || "default").catch(() => {});
   }
 
-  setInputDevice(deviceId: string | null): void {
-    if (this.room && deviceId) {
-      this.room.switchActiveDevice("audioinput", deviceId).catch(() => {});
-    }
+  async setInputDevice(deviceId: string | null): Promise<void> {
+    if (!this.room) return;
+    await this.room.switchActiveDevice("audioinput", deviceId ?? "default");
+    // Rebuild the local mic analyser so VAD tracks the new device
+    const identity = this.room.localParticipant.identity;
+    this.removeAnalyser(identity);
+    this.setupLocalMicAnalyser();
   }
 
   setUserVolume(userId: string, volume: number): void {

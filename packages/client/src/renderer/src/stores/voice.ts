@@ -139,6 +139,12 @@ export const useVoiceStore = create<VoiceStoreState>()((set, get) => ({
       // 4. Enable mic
       await livekitManager.setMicEnabled(true);
 
+      // 5. Restore saved device preferences
+      const savedInput = localStorage.getItem("migo-input-device");
+      const savedOutput = localStorage.getItem("migo-output-device");
+      if (savedInput) livekitManager.setInputDevice(savedInput);
+      if (savedOutput) livekitManager.setOutputDevice(savedOutput);
+
       set({ isConnecting: false });
       playJoinSound();
     } catch (err) {

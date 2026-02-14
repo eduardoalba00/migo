@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { X, User, Lock, Palette, Volume2 } from "lucide-react";
 import { useAuthStore } from "@/stores/auth";
 import { api, resolveUploadUrl } from "@/lib/api";
+import { livekitManager } from "@/lib/livekit";
 import { AUTH_ROUTES, UPLOAD_ROUTES } from "@migo/shared";
 
 interface UserSettingsModalProps {
@@ -230,20 +231,25 @@ function AppearanceTab() {
 }
 
 function VoiceTab() {
-  const [inputDevice, setInputDevice] = useState("");
-  const [outputDevice, setOutputDevice] = useState("");
+  const [inputDevice, setInputDevice] = useState(() => localStorage.getItem("migo-input-device") || "");
+  const [outputDevice, setOutputDevice] = useState(() => localStorage.getItem("migo-output-device") || "");
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
 
-  const loadDevices = async () => {
-    try {
-      const mediaDevices = await navigator.mediaDevices.enumerateDevices();
-      setDevices(mediaDevices);
-    } catch {}
+  useEffect(() => {
+    navigator.mediaDevices.enumerateDevices().then(setDevices).catch(() => {});
+  }, []);
+
+  const handleInputChange = (deviceId: string) => {
+    setInputDevice(deviceId);
+    localStorage.setItem("migo-input-device", deviceId);
+    livekitManager.setInputDevice(deviceId || null);
   };
 
-  useState(() => {
-    loadDevices();
-  });
+  const handleOutputChange = (deviceId: string) => {
+    setOutputDevice(deviceId);
+    localStorage.setItem("migo-output-device", deviceId);
+    livekitManager.setOutputDevice(deviceId || null);
+  };
 
   const inputs = devices.filter((d) => d.kind === "audioinput");
   const outputs = devices.filter((d) => d.kind === "audiooutput");
@@ -256,7 +262,7 @@ function VoiceTab() {
           <label className="text-sm font-medium">Input Device</label>
           <select
             value={inputDevice}
-            onChange={(e) => setInputDevice(e.target.value)}
+            onChange={(e) => handleInputChange(e.target.value)}
             className="w-full mt-1 px-3 py-2 bg-muted rounded-md text-sm outline-none"
           >
             <option value="">Default</option>
@@ -269,7 +275,7 @@ function VoiceTab() {
           <label className="text-sm font-medium">Output Device</label>
           <select
             value={outputDevice}
-            onChange={(e) => setOutputDevice(e.target.value)}
+            onChange={(e) => handleOutputChange(e.target.value)}
             className="w-full mt-1 px-3 py-2 bg-muted rounded-md text-sm outline-none"
           >
             <option value="">Default</option>
