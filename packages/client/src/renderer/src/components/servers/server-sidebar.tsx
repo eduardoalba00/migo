@@ -112,7 +112,7 @@ export function ServerSidebar() {
             <div className="group relative flex items-center justify-center w-full">
               <button
                 onClick={() => setShowCreate(true)}
-                className="h-[42px] w-[42px] rounded-[12px] bg-card flex items-center justify-center text-green-500 transition-all hover:rounded-[8px] hover:bg-green-500 hover:text-white"
+                className="h-[42px] w-[42px] rounded-[12px] bg-card flex items-center justify-center text-primary transition-all hover:rounded-[8px] hover:bg-primary hover:text-primary-foreground"
               >
                 <Plus className="h-6 w-6" />
               </button>
@@ -126,7 +126,7 @@ export function ServerSidebar() {
             <div className="group relative flex items-center justify-center w-full">
               <button
                 onClick={() => setShowJoin(true)}
-                className="h-[42px] w-[42px] rounded-[12px] bg-card flex items-center justify-center text-green-500 transition-all hover:rounded-[8px] hover:bg-green-500 hover:text-white text-sm font-bold"
+                className="h-[42px] w-[42px] rounded-[12px] bg-card flex items-center justify-center text-primary transition-all hover:rounded-[8px] hover:bg-primary hover:text-primary-foreground text-sm font-bold"
               >
                 Join
               </button>
