@@ -1,6 +1,6 @@
 import type { WebSocket } from "ws";
 import { eq, and, inArray } from "drizzle-orm";
-import { WsOpcode, DispatchEvent } from "@migo/shared";
+import { WsOpcode, DispatchEvent, PROTOCOL_VERSION } from "@migo/shared";
 import type { AuthService } from "../services/auth.js";
 import type { AppDatabase } from "../db/index.js";
 import { serverMembers } from "../db/schema/servers.js";
@@ -87,7 +87,7 @@ export function handleConnection(
         socket.send(
           JSON.stringify({
             op: WsOpcode.READY,
-            d: { heartbeatInterval: HEARTBEAT_INTERVAL },
+            d: { heartbeatInterval: HEARTBEAT_INTERVAL, serverVersion: PROTOCOL_VERSION },
           }),
         );
 

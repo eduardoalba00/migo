@@ -36,16 +36,27 @@ jobs:
         id: version
         shell: bash
         run: |
+          BUMP=${{ steps.bump.outputs.type }}
           cd packages/client
-          npm version ${{ steps.bump.outputs.type }} --no-git-tag-version
+          npm version $BUMP --no-git-tag-version
           VERSION=$(node -p "require('./package.json').version")
           echo "version=$VERSION" >> $GITHUB_OUTPUT
+          cd ../server
+          npm version $VERSION --no-git-tag-version --allow-same-version
+          cd ../shared
+          npm version $VERSION --no-git-tag-version --allow-same-version
+
+      - name: Sync PROTOCOL_VERSION
+        shell: bash
+        run: |
+          VERSION=${{ steps.version.outputs.version }}
+          sed -i "s/export const PROTOCOL_VERSION = \".*\"/export const PROTOCOL_VERSION = \"$VERSION\"/" packages/shared/src/constants.ts
 
       - name: Commit version bump
         shell: bash
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add packages/client/package.json
+          git add packages/client/package.json packages/server/package.json packages/shared/package.json packages/shared/src/constants.ts
           git commit -m "chore(version): v${{ steps.version.outputs.version }}"
           git push

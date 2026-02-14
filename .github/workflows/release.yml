@@ -28,8 +28,15 @@ jobs:
       - name: Set version
         shell: bash
         run: |
+          VERSION=${{ inputs.version }}
           cd packages/client
-          npm version ${{ inputs.version }} --no-git-tag-version --allow-same-version
+          npm version $VERSION --no-git-tag-version --allow-same-version
+          cd ../server
+          npm version $VERSION --no-git-tag-version --allow-same-version
+          cd ../shared
+          npm version $VERSION --no-git-tag-version --allow-same-version
+          cd ../..
+          sed -i "s/export const PROTOCOL_VERSION = \".*\"/export const PROTOCOL_VERSION = \"$VERSION\"/" packages/shared/src/constants.ts
 
       - name: Build
         run: pnpm build:client
@@ -44,7 +51,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add packages/client/package.json
+          git add packages/client/package.json packages/server/package.json packages/shared/package.json packages/shared/src/constants.ts
           git diff --cached --quiet || git commit -m "chore(version): v${{ inputs.version }}"
           git tag "v${{ inputs.version }}"
           git push

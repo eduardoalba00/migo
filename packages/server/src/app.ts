@@ -4,6 +4,7 @@ import multipart from "@fastify/multipart";
 import fastifyStatic from "@fastify/static";
 import rateLimit from "@fastify/rate-limit";
 import path from "node:path";
+import { PROTOCOL_VERSION } from "@migo/shared";
 import type { Config } from "./config.js";
 import type { AppDatabase } from "./db/index.js";
 import { AuthService } from "./services/auth.js";
@@ -61,7 +62,7 @@ export async function buildApp(config: Config, db: AppDatabase) {
   const { pubsub, connectionManager } = await createWsHandler(app, db, authService, config);
 
   // Health check
-  app.get("/api/health", async () => ({ status: "ok" }));
+  app.get("/api/health", async () => ({ status: "ok", version: PROTOCOL_VERSION }));
 
   // Routes
   await app.register(authRoutes(db, authService));

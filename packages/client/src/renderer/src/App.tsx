@@ -3,6 +3,7 @@ import { ThemeProvider } from "next-themes";
 import { Toaster } from "@/components/ui/sonner";
 import { Titlebar } from "@/components/titlebar";
 import { UpdateNotification } from "@/components/layout/update-notification";
+import { VersionMismatchBanner } from "@/components/layout/version-mismatch-banner";
 import { AuthPage } from "@/pages/auth";
 import { AppShell } from "@/pages/app-shell";
 import { WorkspacePicker } from "@/pages/workspace-picker";
@@ -42,6 +43,7 @@ export default function App() {
       <div className="flex flex-col h-screen">
         <Titlebar />
         <UpdateNotification />
+        <VersionMismatchBanner />
         {!activeWorkspaceId ? (
           <WorkspacePicker />
         ) : isAuthenticated ? (

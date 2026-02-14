@@ -1,4 +1,4 @@
-import { WsOpcode } from "@migo/shared";
+import { WsOpcode, PROTOCOL_VERSION } from "@migo/shared";
 import type { WsServerMessage, WsDispatch } from "@migo/shared";
 
 export type DispatchHandler = (event: WsDispatch) => void;
@@ -15,6 +15,7 @@ export class WebSocketManager {
   private dispatchHandler: DispatchHandler | null = null;
   private voiceSignalHandler: VoiceSignalHandler | null = null;
   private onStatusChange: ((connected: boolean) => void) | null = null;
+  private onVersionMismatch: ((serverVersion: string) => void) | null = null;
   private intentionalClose = false;
 
   setUrl(url: string) {
@@ -43,6 +44,10 @@ export class WebSocketManager {
 
   setVoiceSignalHandler(handler: VoiceSignalHandler) {
     this.voiceSignalHandler = handler;
+  }
+
+  setVersionMismatchHandler(handler: (serverVersion: string) => void) {
+    this.onVersionMismatch = handler;
   }
 
   send(data: unknown) {
@@ -77,7 +82,17 @@ export class WebSocketManager {
       }
 
       if ((msg as any).op === WsOpcode.READY) {
-        const { heartbeatInterval } = (msg as any).d;
+        const { heartbeatInterval, serverVersion } = (msg as any).d;
+
+        // Check major version compatibility
+        const clientMajor = PROTOCOL_VERSION.split(".")[0];
+        const serverMajor = serverVersion?.split(".")[0];
+        if (serverVersion && clientMajor !== serverMajor) {
+          this.onVersionMismatch?.(serverVersion);
+          this.disconnect();
+          return;
+        }
+
         this.startHeartbeat(heartbeatInterval);
         this.reconnectAttempts = 0;
         this.onStatusChange?.(true);

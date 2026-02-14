@@ -1,3 +1,5 @@
+export const PROTOCOL_VERSION = "0.7.0";
+
 export const AUTH_ROUTES = {
   REGISTER: "/api/auth/register",
   LOGIN: "/api/auth/login",

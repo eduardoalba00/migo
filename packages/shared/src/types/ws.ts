@@ -58,7 +58,7 @@ export interface WsHeartbeatAck {
 
 export interface WsReady {
   op: typeof WsOpcode.READY;
-  d: { heartbeatInterval: number };
+  d: { heartbeatInterval: number; serverVersion: string };
 }
 
 export interface WsDispatch<T = unknown> {
