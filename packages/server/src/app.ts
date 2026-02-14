@@ -22,12 +22,14 @@ import { createWsHandler } from "./ws/handler.js";
 
 export async function buildApp(config: Config, db: AppDatabase) {
   const app = Fastify({
-    logger: {
-      transport: {
-        target: "pino-pretty",
-        options: { colorize: true },
-      },
-    },
+    logger: process.env.NODE_ENV === "production"
+      ? true
+      : {
+          transport: {
+            target: "pino-pretty",
+            options: { colorize: true },
+          },
+        },
   });
 
   await app.register(cors, {
