@@ -44,6 +44,7 @@ export const useWorkspaceStore = create<WorkspaceState>()(
       },
 
       removeWorkspace: (id) => {
+        if (id === "default") return;
         // Clean up auth for this workspace
         localStorage.removeItem(`migo-auth-${id}`);
 
