@@ -1,4 +1,4 @@
-export const PROTOCOL_VERSION = "0.7.1";
+export const PROTOCOL_VERSION = "0.8.0";
 
 export const AUTH_ROUTES = {
   REGISTER: "/api/auth/register",
