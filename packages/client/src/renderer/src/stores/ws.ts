@@ -79,8 +79,10 @@ export const useWsStore = create<WsState>()((set) => ({
           break;
         case DispatchEvent.MEMBER_JOIN:
           useServerStore.getState().fetchServers();
+          useMemberStore.getState().handleMemberJoin(event.d as ServerMember);
           break;
         case DispatchEvent.MEMBER_LEAVE:
+          useMemberStore.getState().handleMemberLeave(event.d as MemberLeaveData);
           break;
         case DispatchEvent.VOICE_STATE_UPDATE:
           useVoiceStore.getState().handleVoiceStateUpdate(event.d as VoiceState);

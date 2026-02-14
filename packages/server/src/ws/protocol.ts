@@ -197,6 +197,14 @@ export function handleConnection(
   socket.on("close", async () => {
     clearTimeout(identifyTimeout);
     if (userId) {
+      // Stale-socket guard: if a new connection already replaced this one,
+      // the close event is from the old socket — bail out to avoid destroying
+      // the new connection's subscriptions.
+      const conn = connectionManager.get(userId);
+      if (conn && conn.socket !== socket) {
+        return;
+      }
+
       // Set user offline and broadcast presence
       await db
         .update(users)
@@ -204,7 +212,6 @@ export function handleConnection(
         .where(eq(users.id, userId))
         ;
 
-      const conn = connectionManager.get(userId);
       if (conn) {
         for (const serverId of conn.subscribedServers) {
           connectionManager.broadcastToServer(serverId, {

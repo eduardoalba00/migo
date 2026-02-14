@@ -10,6 +10,8 @@ interface MemberState {
 
   fetchMembers: (serverId: string) => Promise<void>;
   handlePresenceUpdate: (data: { userId: string; status: UserStatus }) => void;
+  handleMemberJoin: (member: ServerMember) => void;
+  handleMemberLeave: (data: { userId: string; serverId: string }) => void;
   toggleSidebar: () => void;
   clearMembers: () => void;
 }
@@ -41,6 +43,29 @@ export const useMemberStore = create<MemberState>()((set) => ({
           : m,
       ),
     }));
+  },
+
+  handleMemberJoin: (member) => {
+    set((s) => {
+      // Only update if this member belongs to the currently loaded server
+      if (s.members.length === 0 || s.members[0]?.serverId !== member.serverId) return s;
+      // Avoid duplicates
+      if (s.members.some((m) => m.userId === member.userId)) return s;
+      return {
+        members: [...s.members, member],
+        presenceMap: { ...s.presenceMap, [member.user.id]: member.user.status as UserStatus },
+      };
+    });
+  },
+
+  handleMemberLeave: (data) => {
+    set((s) => {
+      // Only update if the event matches the currently loaded server
+      if (s.members.length === 0 || s.members[0]?.serverId !== data.serverId) return s;
+      return {
+        members: s.members.filter((m) => m.userId !== data.userId),
+      };
+    });
   },
 
   toggleSidebar: () => set((s) => ({ showSidebar: !s.showSidebar })),
