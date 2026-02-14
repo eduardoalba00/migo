@@ -64,7 +64,14 @@ export const useWorkspaceStore = create<WorkspaceState>()(
         }
       },
 
-      setActiveWorkspace: (id) => set({ activeWorkspaceId: id }),
+      setActiveWorkspace: (id) => {
+        // Leave voice channel before switching away
+        const voiceState = useVoiceStore.getState();
+        if (voiceState.currentChannelId) {
+          voiceState.leaveChannel();
+        }
+        set({ activeWorkspaceId: id });
+      },
 
       switchWorkspace: (id) => {
         const { workspaces, activeWorkspaceId } = get();

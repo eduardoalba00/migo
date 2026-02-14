@@ -4,6 +4,7 @@ import type { VoiceState, VoiceChannelUser } from "@migo/shared";
 import { livekitManager } from "@/lib/livekit";
 import { wsManager } from "@/lib/ws";
 import { playJoinSound, playLeaveSound, playMuteSound, playUnmuteSound } from "@/lib/sounds";
+import { useAuthStore } from "./auth";
 import { useMemberStore } from "./members";
 
 interface VoiceStoreState {
@@ -149,6 +150,7 @@ export const useVoiceStore = create<VoiceStoreState>()((set, get) => ({
   },
 
   leaveChannel: () => {
+    const { currentChannelId } = get();
     livekitManager.disconnect();
     livekitManager.setSpeakingCallback(null);
     livekitManager.setScreenShareCallback(null);
@@ -158,6 +160,24 @@ export const useVoiceStore = create<VoiceStoreState>()((set, get) => ({
       op: WsOpcode.VOICE_STATE_UPDATE,
       d: { channelId: null, serverId: "" },
     });
+
+    // Immediately remove self from channelUsers so the UI updates
+    const userId = useAuthStore.getState().user?.id;
+    if (userId && currentChannelId) {
+      set((s) => {
+        const channelUsers = { ...s.channelUsers };
+        if (channelUsers[currentChannelId]?.[userId]) {
+          const updated = { ...channelUsers[currentChannelId] };
+          delete updated[userId];
+          if (Object.keys(updated).length === 0) {
+            delete channelUsers[currentChannelId];
+          } else {
+            channelUsers[currentChannelId] = updated;
+          }
+        }
+        return { channelUsers };
+      });
+    }
 
     playLeaveSound();
     set({
