@@ -2,6 +2,12 @@ import { create } from "zustand";
 import type { Server } from "@migo/shared";
 import { SERVER_ROUTES, INVITE_ROUTES, buildRoute } from "@migo/shared";
 import { api } from "@/lib/api";
+import { useWorkspaceStore } from "./workspace";
+
+function getStorageKey(): string {
+  const wsId = useWorkspaceStore.getState().activeWorkspaceId ?? "default";
+  return `migo-last-server-${wsId}`;
+}
 
 interface ServerState {
   servers: Server[];
@@ -21,7 +27,9 @@ export const useServerStore = create<ServerState>()((set, get) => ({
 
   fetchServers: async () => {
     const servers = await api.get<Server[]>(SERVER_ROUTES.LIST);
-    set({ servers });
+    const lastServerId = localStorage.getItem(getStorageKey());
+    const restored = lastServerId && servers.some((s) => s.id === lastServerId) ? lastServerId : null;
+    set({ servers, activeServerId: restored });
   },
 
   createServer: async (name) => {
@@ -52,5 +60,12 @@ export const useServerStore = create<ServerState>()((set, get) => ({
     }));
   },
 
-  setActiveServer: (serverId) => set({ activeServerId: serverId }),
+  setActiveServer: (serverId) => {
+    set({ activeServerId: serverId });
+    if (serverId) {
+      localStorage.setItem(getStorageKey(), serverId);
+    } else {
+      localStorage.removeItem(getStorageKey());
+    }
+  },
 }));
