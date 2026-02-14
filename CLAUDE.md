@@ -17,7 +17,7 @@ pnpm dev:client2         # Second client instance (MIGO_INSTANCE=2)
 pnpm build:server        # tsc → packages/server/dist/
 pnpm build:client        # electron-vite build
 
-# Database (Drizzle ORM + SQLite)
+# Database (Drizzle ORM + PostgreSQL)
 pnpm db:generate         # Generate migration files from schema changes
 pnpm db:migrate          # Apply migrations (tsx src/db/migrate.ts)
 ```
@@ -28,7 +28,7 @@ No test framework is configured yet.
 
 **pnpm monorepo** with three packages:
 
-- **`@migo/server`** — Fastify 5 REST API + WebSocket server. SQLite via Drizzle ORM + libsql. Voice via LiveKit (token service). Auth via argon2 + JWT (jose).
+- **`@migo/server`** — Fastify 5 REST API + WebSocket server. PostgreSQL via Drizzle ORM + postgres.js. Voice via LiveKit (token service). Auth via argon2 + JWT (jose).
 - **`@migo/client`** — Electron 40 desktop app. React 19 renderer built with electron-vite. State management with Zustand. Styling with Tailwind CSS 4 (OKLCH color tokens). UI primitives from Radix UI.
 - **`@migo/shared`** — Zod schemas, TypeScript types, and API route constants shared between client and server.
 
@@ -47,7 +47,7 @@ The shared package uses a custom export condition `@migo/source` so dev tools (t
 | `ws/` | WebSocket protocol: connection registry, opcode handler, EventEmitter-based pubsub |
 | `voice/` | LiveKit token service, voice state tracking |
 
-Config is env-based (`config.ts`): `PORT`, `HOST`, `DATABASE_PATH`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`. Defaults work for local dev (auto-generated JWT secrets, `./migo.db`). LiveKit dev server: `docker run --rm -p 7880:7880 -p 7881:7881 -p 7882:7882/udp livekit/livekit-server --dev --bind 0.0.0.0`.
+Config is env-based (`config.ts`): `PORT`, `HOST`, `DATABASE_URL`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`. Defaults work for local dev (auto-generated JWT secrets, `postgres://localhost:5432/migo`). LiveKit dev server: `docker run --rm -p 7880:7880 -p 7881:7881 -p 7882:7882/udp livekit/livekit-server --dev --bind 0.0.0.0`.
 
 ### Client structure (`packages/client/src/renderer/src/`)
 
@@ -70,7 +70,7 @@ JWT access (15m) + refresh (7d) tokens. Client stores tokens per workspace in lo
 
 ## Key Conventions
 
-- All database IDs are UUIDs; timestamps are integer milliseconds
+- All database IDs are UUIDs; timestamps are PostgreSQL `timestamp` type
 - Zod validates on both client (forms) and server (route handlers)
 - Server routes use `:paramName` path templates with a `fastifyRoute()` helper from `lib/route-utils.ts`
 - API route paths are defined as constants in `@migo/shared` and shared across packages

@@ -1,7 +1,7 @@
-import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
+import { pgTable, text, integer, timestamp } from "drizzle-orm/pg-core";
 import { messages } from "./messages.js";
 
-export const attachments = sqliteTable("attachments", {
+export const attachments = pgTable("attachments", {
   id: text("id").primaryKey(),
   messageId: text("message_id")
     .notNull()
@@ -11,7 +11,7 @@ export const attachments = sqliteTable("attachments", {
   mimeType: text("mime_type").notNull(),
   size: integer("size").notNull(),
   url: text("url").notNull(),
-  createdAt: integer("created_at", { mode: "timestamp" })
+  createdAt: timestamp("created_at")
     .notNull()
     .$defaultFn(() => new Date()),
 });

@@ -1,8 +1,8 @@
-import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
+import { pgTable, text, integer, timestamp } from "drizzle-orm/pg-core";
 import { servers } from "./servers.js";
 import { users } from "./users.js";
 
-export const invites = sqliteTable("invites", {
+export const invites = pgTable("invites", {
   id: text("id").primaryKey(),
   serverId: text("server_id")
     .notNull()
@@ -13,8 +13,8 @@ export const invites = sqliteTable("invites", {
     .references(() => users.id, { onDelete: "cascade" }),
   maxUses: integer("max_uses"),
   uses: integer("uses").notNull().default(0),
-  expiresAt: integer("expires_at", { mode: "timestamp" }),
-  createdAt: integer("created_at", { mode: "timestamp" })
+  expiresAt: timestamp("expires_at"),
+  createdAt: timestamp("created_at")
     .notNull()
     .$defaultFn(() => new Date()),
 });

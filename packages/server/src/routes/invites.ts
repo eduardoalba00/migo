@@ -73,9 +73,9 @@ export function inviteRoutes(
         uses: 0,
         expiresAt,
         createdAt: now,
-      }).run();
+      });
 
-      const invite = (await db.select().from(invites).where(eq(invites.id, id)).get())!;
+      const invite = (await db.select().from(invites).where(eq(invites.id, id)).then(r => r[0]))!;
 
       return reply.status(201).send({
         id: invite.id,
@@ -102,7 +102,7 @@ export function inviteRoutes(
         .select()
         .from(invites)
         .where(eq(invites.serverId, serverId))
-        .all();
+        ;
 
       return reply.send(
         allInvites.map((inv) => ({
@@ -130,7 +130,7 @@ export function inviteRoutes(
       await db
         .delete(invites)
         .where(and(eq(invites.id, inviteId), eq(invites.serverId, serverId)))
-        .run();
+        ;
 
       return reply.status(204).send();
     });
@@ -146,7 +146,7 @@ export function inviteRoutes(
         .select()
         .from(invites)
         .where(eq(invites.code, parsed.data.code))
-        .get();
+        .then(r => r[0]);
 
       if (!invite) {
         return reply.status(404).send({ error: "Invalid invite code" });
@@ -167,7 +167,7 @@ export function inviteRoutes(
         .select()
         .from(bans)
         .where(and(eq(bans.serverId, invite.serverId), eq(bans.userId, request.user.sub)))
-        .get();
+        .then(r => r[0]);
       if (ban) {
         return reply.status(403).send({ error: "You are banned from this server" });
       }
@@ -186,17 +186,17 @@ export function inviteRoutes(
         serverId: invite.serverId,
         userId: request.user.sub,
         joinedAt: now,
-      }).run();
+      });
 
       // Increment uses
       await db
         .update(invites)
         .set({ uses: invite.uses + 1 })
         .where(eq(invites.id, invite.id))
-        .run();
+        ;
 
-      const server = (await db.select().from(servers).where(eq(servers.id, invite.serverId)).get())!;
-      const user = (await db.select().from(users).where(eq(users.id, request.user.sub)).get())!;
+      const server = (await db.select().from(servers).where(eq(servers.id, invite.serverId)).then(r => r[0]))!;
+      const user = (await db.select().from(users).where(eq(users.id, request.user.sub)).then(r => r[0]))!;
 
       pubsub.publish(`server:${invite.serverId}`, {
         op: 0,

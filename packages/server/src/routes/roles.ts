@@ -43,7 +43,7 @@ export function roleRoutes(
         .select()
         .from(roles)
         .where(eq(roles.serverId, serverId))
-        .all();
+        ;
 
       return reply.send(allRoles.map(roleToPublic));
     });
@@ -67,7 +67,7 @@ export function roleRoutes(
         .select()
         .from(roles)
         .where(eq(roles.serverId, serverId))
-        .all();
+        ;
       const maxPosition = existing.reduce((max, r) => Math.max(max, r.position), 0);
 
       const id = crypto.randomUUID();
@@ -82,9 +82,9 @@ export function roleRoutes(
         permissions: parsed.data.permissions ?? 0,
         isDefault: false,
         createdAt: now,
-      }).run();
+      });
 
-      const role = (await db.select().from(roles).where(eq(roles.id, id)).get())!;
+      const role = (await db.select().from(roles).where(eq(roles.id, id)).then(r => r[0]))!;
       return reply.status(201).send(roleToPublic(role));
     });
 
@@ -106,7 +106,7 @@ export function roleRoutes(
         .select()
         .from(roles)
         .where(and(eq(roles.id, roleId), eq(roles.serverId, serverId)))
-        .get();
+        .then(r => r[0]);
       if (!existing) {
         return reply.status(404).send({ error: "Role not found" });
       }
@@ -118,10 +118,10 @@ export function roleRoutes(
       if (parsed.data.position !== undefined) updates.position = parsed.data.position;
 
       if (Object.keys(updates).length > 0) {
-        await db.update(roles).set(updates).where(eq(roles.id, roleId)).run();
+        await db.update(roles).set(updates).where(eq(roles.id, roleId));
       }
 
-      const role = (await db.select().from(roles).where(eq(roles.id, roleId)).get())!;
+      const role = (await db.select().from(roles).where(eq(roles.id, roleId)).then(r => r[0]))!;
       return reply.send(roleToPublic(role));
     });
 
@@ -138,7 +138,7 @@ export function roleRoutes(
         .select()
         .from(roles)
         .where(and(eq(roles.id, roleId), eq(roles.serverId, serverId)))
-        .get();
+        .then(r => r[0]);
       if (!existing) {
         return reply.status(404).send({ error: "Role not found" });
       }
@@ -146,7 +146,7 @@ export function roleRoutes(
         return reply.status(400).send({ error: "Cannot delete the default role" });
       }
 
-      await db.delete(roles).where(eq(roles.id, roleId)).run();
+      await db.delete(roles).where(eq(roles.id, roleId));
       return reply.status(204).send();
     });
 
@@ -159,7 +159,7 @@ export function roleRoutes(
         return reply.status(403).send({ error: "Only the server owner can assign roles" });
       }
 
-      const role = await db.select().from(roles).where(and(eq(roles.id, roleId), eq(roles.serverId, serverId))).get();
+      const role = await db.select().from(roles).where(and(eq(roles.id, roleId), eq(roles.serverId, serverId))).then(r => r[0]);
       if (!role) {
         return reply.status(404).send({ error: "Role not found" });
       }
@@ -168,7 +168,7 @@ export function roleRoutes(
         .select()
         .from(serverMembers)
         .where(and(eq(serverMembers.serverId, serverId), eq(serverMembers.userId, userId)))
-        .get();
+        .then(r => r[0]);
       if (!member) {
         return reply.status(404).send({ error: "Member not found" });
       }
@@ -178,7 +178,7 @@ export function roleRoutes(
         .select()
         .from(memberRoles)
         .where(and(eq(memberRoles.roleId, roleId), eq(memberRoles.userId, userId), eq(memberRoles.serverId, serverId)))
-        .get();
+        .then(r => r[0]);
       if (existing) {
         return reply.status(409).send({ error: "Role already assigned" });
       }
@@ -189,7 +189,7 @@ export function roleRoutes(
         roleId,
         serverId,
         userId,
-      }).run();
+      });
 
       return reply.status(204).send();
     });
@@ -206,7 +206,7 @@ export function roleRoutes(
       await db
         .delete(memberRoles)
         .where(and(eq(memberRoles.roleId, roleId), eq(memberRoles.userId, userId), eq(memberRoles.serverId, serverId)))
-        .run();
+        ;
 
       return reply.status(204).send();
     });

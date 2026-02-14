@@ -1,7 +1,7 @@
-import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
+import { pgTable, text, integer } from "drizzle-orm/pg-core";
 import { servers } from "./servers.js";
 
-export const categories = sqliteTable("categories", {
+export const categories = pgTable("categories", {
   id: text("id").primaryKey(),
   serverId: text("server_id")
     .notNull()
@@ -10,7 +10,7 @@ export const categories = sqliteTable("categories", {
   position: integer("position").notNull().default(0),
 });
 
-export const channels = sqliteTable("channels", {
+export const channels = pgTable("channels", {
   id: text("id").primaryKey(),
   serverId: text("server_id")
     .notNull()

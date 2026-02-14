@@ -38,7 +38,7 @@ export function dmRoutes(
         .from(dmMembers)
         .innerJoin(dmChannels, eq(dmMembers.channelId, dmChannels.id))
         .where(eq(dmMembers.userId, request.user.sub))
-        .all();
+        ;
 
       const result = [];
       for (const row of myDms) {
@@ -48,7 +48,7 @@ export function dmRoutes(
           .from(dmMembers)
           .innerJoin(users, eq(dmMembers.userId, users.id))
           .where(and(eq(dmMembers.channelId, row.dm_channels.id)))
-          .all();
+          ;
 
         const recipients = members
           .filter((m) => m.dm_members.userId !== request.user.sub)
@@ -83,7 +83,7 @@ export function dmRoutes(
         return reply.status(400).send({ error: "Cannot DM yourself" });
       }
 
-      const recipient = await db.select().from(users).where(eq(users.id, body.recipientId)).get();
+      const recipient = await db.select().from(users).where(eq(users.id, body.recipientId)).then(r => r[0]);
       if (!recipient) {
         return reply.status(404).send({ error: "User not found" });
       }
@@ -93,17 +93,17 @@ export function dmRoutes(
         .select()
         .from(dmMembers)
         .where(eq(dmMembers.userId, request.user.sub))
-        .all();
+        ;
 
       for (const dm of myDms) {
         const otherMember = await db
           .select()
           .from(dmMembers)
           .where(and(eq(dmMembers.channelId, dm.channelId), eq(dmMembers.userId, body.recipientId)))
-          .get();
+          .then(r => r[0]);
         if (otherMember) {
           // Existing DM found
-          const channel = (await db.select().from(dmChannels).where(eq(dmChannels.id, dm.channelId)).get())!;
+          const channel = (await db.select().from(dmChannels).where(eq(dmChannels.id, dm.channelId)).then(r => r[0]))!;
           return reply.send({
             id: channel.id,
             recipients: [userToPublic(recipient)],
@@ -120,21 +120,21 @@ export function dmRoutes(
       await db.insert(dmChannels).values({
         id: channelId,
         createdAt: now,
-      }).run();
+      });
 
       await db.insert(dmMembers).values({
         id: crypto.randomUUID(),
         channelId,
         userId: request.user.sub,
-      }).run();
+      });
 
       await db.insert(dmMembers).values({
         id: crypto.randomUUID(),
         channelId,
         userId: body.recipientId,
-      }).run();
+      });
 
-      const currentUser = (await db.select().from(users).where(eq(users.id, request.user.sub)).get())!;
+      const currentUser = (await db.select().from(users).where(eq(users.id, request.user.sub)).then(r => r[0]))!;
 
       // Notify both users via WS
       connectionManager.sendTo(body.recipientId, {
@@ -165,7 +165,7 @@ export function dmRoutes(
         .select()
         .from(dmMembers)
         .where(and(eq(dmMembers.channelId, channelId), eq(dmMembers.userId, request.user.sub)))
-        .get();
+        .then(r => r[0]);
       if (!membership) {
         return reply.status(403).send({ error: "Not a member of this DM" });
       }
@@ -180,10 +180,10 @@ export function dmRoutes(
         .where(eq(messages.channelId, channelId))
         .orderBy(desc(messages.createdAt))
         .limit(limit)
-        .all();
+        ;
 
       if (query.before) {
-        const beforeMsg = await db.select().from(messages).where(eq(messages.id, query.before)).get();
+        const beforeMsg = await db.select().from(messages).where(eq(messages.id, query.before)).then(r => r[0]);
         if (beforeMsg) {
           msgs = msgs.filter((m) => m.messages.createdAt < beforeMsg.createdAt);
         }
@@ -214,7 +214,7 @@ export function dmRoutes(
         .select()
         .from(dmMembers)
         .where(and(eq(dmMembers.channelId, channelId), eq(dmMembers.userId, request.user.sub)))
-        .get();
+        .then(r => r[0]);
       if (!membership) {
         return reply.status(403).send({ error: "Not a member of this DM" });
       }
@@ -233,12 +233,12 @@ export function dmRoutes(
         authorId: request.user.sub,
         content: body.content.trim(),
         createdAt: now,
-      }).run();
+      });
 
       // Update last message time
-      await db.update(dmChannels).set({ lastMessageAt: now }).where(eq(dmChannels.id, channelId)).run();
+      await db.update(dmChannels).set({ lastMessageAt: now }).where(eq(dmChannels.id, channelId));
 
-      const author = (await db.select().from(users).where(eq(users.id, request.user.sub)).get())!;
+      const author = (await db.select().from(users).where(eq(users.id, request.user.sub)).then(r => r[0]))!;
 
       const message = {
         id,
@@ -258,7 +258,7 @@ export function dmRoutes(
         .select()
         .from(dmMembers)
         .where(eq(dmMembers.channelId, channelId))
-        .all();
+        ;
 
       for (const member of allMembers) {
         connectionManager.sendTo(member.userId, {

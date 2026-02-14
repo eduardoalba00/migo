@@ -4,10 +4,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "tsx watch --conditions @migo/source src/index.ts",
+    "dev": "tsx watch --env-file=../../.env --conditions @migo/source src/index.ts",
     "build": "tsc",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "tsx src/db/migrate.ts"
+    "db:migrate": "tsx --env-file=../../.env src/db/migrate.ts"
   },
   "dependencies": {
     "@fastify/cors": "^11.0.1",
@@ -15,7 +15,7 @@
     "@fastify/rate-limit": "^10.3.0",
     "@fastify/static": "^9.0.0",
     "@fastify/websocket": "^11.2.0",
-    "@libsql/client": "^0.15.7",
+    "postgres": "^3.4.5",
     "@migo/shared": "workspace:*",
     "argon2": "^0.43.0",
     "drizzle-orm": "^0.44.1",

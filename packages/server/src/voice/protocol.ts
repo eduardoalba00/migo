@@ -121,7 +121,7 @@ async function broadcastVoiceState(
   channelId: string,
   left: boolean,
 ): Promise<void> {
-  const user = await db.select().from(users).where(eq(users.id, userId)).get();
+  const user = await db.select().from(users).where(eq(users.id, userId)).then(r => r[0]);
 
   connectionManager.broadcastToServer(serverId, {
     op: WsOpcode.DISPATCH,

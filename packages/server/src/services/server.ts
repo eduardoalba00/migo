@@ -7,7 +7,7 @@ export class ServerService {
   constructor(private db: AppDatabase) {}
 
   async getServerOrNull(serverId: string) {
-    return this.db.select().from(servers).where(eq(servers.id, serverId)).get();
+    return this.db.select().from(servers).where(eq(servers.id, serverId)).then(r => r[0]);
   }
 
   async isOwner(serverId: string, userId: string): Promise<boolean> {
@@ -25,7 +25,7 @@ export class ServerService {
           eq(serverMembers.userId, userId),
         ),
       )
-      .get();
+      .then(r => r[0]);
     return !!member;
   }
 }

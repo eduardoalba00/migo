@@ -53,7 +53,7 @@ export function searchRoutes(
         .select()
         .from(channels)
         .where(eq(channels.serverId, serverId))
-        .all();
+        ;
       const channelIds = serverChannels.map((c) => c.id);
 
       if (channelIds.length === 0) {
@@ -69,7 +69,7 @@ export function searchRoutes(
           .innerJoin(users, eq(messages.authorId, users.id))
           .where(and(eq(messages.channelId, chId), like(messages.content, searchTerm)))
           .limit(limit)
-          .all();
+          ;
         for (const row of msgs) {
           results.push({
             id: row.messages.id,

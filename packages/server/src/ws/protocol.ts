@@ -53,7 +53,7 @@ export function handleConnection(
           .select()
           .from(serverMembers)
           .where(eq(serverMembers.userId, userId))
-          .all();
+          ;
 
         const serverIds = memberships.map((m) => m.serverId);
         const conn = connectionManager.add(userId, socket, serverIds);
@@ -73,7 +73,7 @@ export function handleConnection(
           .update(users)
           .set({ status: "online" })
           .where(eq(users.id, userId))
-          .run();
+          ;
 
         for (const serverId of serverIds) {
           connectionManager.broadcastToServer(serverId, {
@@ -97,8 +97,7 @@ export function handleConnection(
           // Look up user info for all voice participants
           const voiceUserIds = [...new Set(voiceStates.map((s) => s.userId))];
           const voiceUsers = voiceUserIds.length > 0
-            ? await db.select().from(users).where(inArray(users.id, voiceUserIds)).all()
-            : [];
+            ? await db.select().from(users).where(inArray(users.id, voiceUserIds))            : [];
           const userMap = new Map(voiceUsers.map((u) => [u.id, u]));
 
           for (const vs of voiceStates) {
@@ -159,7 +158,7 @@ export function handleConnection(
         .select()
         .from(channels)
         .where(eq(channels.id, channelId))
-        .get();
+        .then(r => r[0]);
       if (!channel) return;
 
       const member = await db
@@ -171,14 +170,14 @@ export function handleConnection(
             eq(serverMembers.userId, userId),
           ),
         )
-        .get();
+        .then(r => r[0]);
       if (!member) return;
 
       const user = await db
         .select()
         .from(users)
         .where(eq(users.id, userId))
-        .get();
+        .then(r => r[0]);
       if (!user) return;
 
       connectionManager.broadcastToServer(channel.serverId, {
@@ -203,7 +202,7 @@ export function handleConnection(
         .update(users)
         .set({ status: "offline" })
         .where(eq(users.id, userId))
-        .run();
+        ;
 
       const conn = connectionManager.get(userId);
       if (conn) {

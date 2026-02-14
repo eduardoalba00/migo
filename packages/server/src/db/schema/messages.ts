@@ -1,8 +1,8 @@
-import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
+import { pgTable, text, timestamp } from "drizzle-orm/pg-core";
 import { channels } from "./channels.js";
 import { users } from "./users.js";
 
-export const messages = sqliteTable("messages", {
+export const messages = pgTable("messages", {
   id: text("id").primaryKey(),
   channelId: text("channel_id")
     .notNull()
@@ -12,10 +12,10 @@ export const messages = sqliteTable("messages", {
     .references(() => users.id, { onDelete: "cascade" }),
   content: text("content").notNull(),
   replyToId: text("reply_to_id"),
-  editedAt: integer("edited_at", { mode: "timestamp" }),
-  pinnedAt: integer("pinned_at", { mode: "timestamp" }),
+  editedAt: timestamp("edited_at"),
+  pinnedAt: timestamp("pinned_at"),
   pinnedBy: text("pinned_by"),
-  createdAt: integer("created_at", { mode: "timestamp" })
+  createdAt: timestamp("created_at")
     .notNull()
     .$defaultFn(() => new Date()),
 });

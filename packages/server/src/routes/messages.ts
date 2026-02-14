@@ -31,7 +31,7 @@ async function getReactionsForMessage(db: AppDatabase, messageId: string, curren
     .select()
     .from(reactions)
     .where(eq(reactions.messageId, messageId))
-    .all();
+    ;
 
   const grouped: Record<string, { count: number; me: boolean }> = {};
   for (const r of allReactions) {
@@ -48,7 +48,7 @@ async function getAttachmentsForMessage(db: AppDatabase, messageId: string) {
     .select()
     .from(attachments)
     .where(eq(attachments.messageId, messageId))
-    .all();
+    ;
 
   return rows.map((a) => ({
     id: a.id,
@@ -67,7 +67,7 @@ async function getReplyRef(db: AppDatabase, replyToId: string | null) {
     .from(messages)
     .innerJoin(users, eq(messages.authorId, users.id))
     .where(eq(messages.id, replyToId))
-    .get();
+    .then(r => r[0]);
 
   if (!row) return null;
   return {
@@ -93,7 +93,7 @@ export function messageRoutes(
         .select()
         .from(channels)
         .where(eq(channels.id, channelId))
-        .get();
+        .then(r => r[0]);
 
       if (!channel) return { error: "Channel not found", status: 404, channel: null };
 
@@ -106,7 +106,7 @@ export function messageRoutes(
             eq(serverMembers.userId, userId),
           ),
         )
-        .get();
+        .then(r => r[0]);
 
       if (!member) return { error: "Not a member of this server", status: 403, channel: null };
 
@@ -135,7 +135,7 @@ export function messageRoutes(
         content: parsed.data.content,
         replyToId: parsed.data.replyToId ?? null,
         createdAt: now,
-      }).run();
+      });
 
       // Link attachments if provided
       if (parsed.data.attachmentIds?.length) {
@@ -144,11 +144,11 @@ export function messageRoutes(
             .update(attachments)
             .set({ messageId: id })
             .where(and(eq(attachments.id, attachmentId), eq(attachments.messageId, "__pending__")))
-            .run();
+            ;
         }
       }
 
-      const author = (await db.select().from(users).where(eq(users.id, request.user.sub)).get())!;
+      const author = (await db.select().from(users).where(eq(users.id, request.user.sub)).then(r => r[0]))!;
       const replyTo = await getReplyRef(db, parsed.data.replyToId ?? null);
       const messageAttachments = await getAttachmentsForMessage(db, id);
 
@@ -200,7 +200,7 @@ export function messageRoutes(
         .orderBy(desc(messages.createdAt), desc(messages.id))
         .limit(limit);
 
-      const rows = await query.all();
+      const rows = await query;
       const reversed = rows.reverse();
 
       const result = await Promise.all(
@@ -238,7 +238,7 @@ export function messageRoutes(
         .select()
         .from(messages)
         .where(and(eq(messages.id, messageId), eq(messages.channelId, channelId)))
-        .get();
+        .then(r => r[0]);
 
       if (!message) {
         return reply.status(404).send({ error: "Message not found" });
@@ -258,9 +258,9 @@ export function messageRoutes(
         .update(messages)
         .set({ content: parsed.data.content, editedAt: now })
         .where(eq(messages.id, messageId))
-        .run();
+        ;
 
-      const author = (await db.select().from(users).where(eq(users.id, request.user.sub)).get())!;
+      const author = (await db.select().from(users).where(eq(users.id, request.user.sub)).then(r => r[0]))!;
       const replyTo = await getReplyRef(db, message.replyToId);
       const messageReactions = await getReactionsForMessage(db, messageId, request.user.sub);
       const messageAttachments = await getAttachmentsForMessage(db, messageId);
@@ -298,7 +298,7 @@ export function messageRoutes(
         .select()
         .from(messages)
         .where(and(eq(messages.id, messageId), eq(messages.channelId, channelId)))
-        .get();
+        .then(r => r[0]);
 
       if (!message) {
         return reply.status(404).send({ error: "Message not found" });
@@ -310,13 +310,13 @@ export function messageRoutes(
           .select()
           .from(servers)
           .where(eq(servers.id, channel!.serverId))
-          .get();
+          .then(r => r[0]);
         if (!srv || srv.ownerId !== request.user.sub) {
           return reply.status(403).send({ error: "You can only delete your own messages" });
         }
       }
 
-      await db.delete(messages).where(eq(messages.id, messageId)).run();
+      await db.delete(messages).where(eq(messages.id, messageId));
 
       pubsub.publish(`server:${channel!.serverId}`, {
         op: 0,
@@ -338,7 +338,7 @@ export function messageRoutes(
         .select()
         .from(messages)
         .where(and(eq(messages.id, messageId), eq(messages.channelId, channelId)))
-        .get();
+        .then(r => r[0]);
       if (!message) return reply.status(404).send({ error: "Message not found" });
 
       // Check if already reacted with this emoji
@@ -352,7 +352,7 @@ export function messageRoutes(
             eq(reactions.emoji, decodeURIComponent(emoji)),
           ),
         )
-        .get();
+        .then(r => r[0]);
 
       if (existing) {
         return reply.status(204).send();
@@ -364,7 +364,7 @@ export function messageRoutes(
         userId: request.user.sub,
         emoji: decodeURIComponent(emoji),
         createdAt: new Date(),
-      }).run();
+      });
 
       pubsub.publish(`server:${channel!.serverId}`, {
         op: 0,
@@ -391,7 +391,7 @@ export function messageRoutes(
             eq(reactions.emoji, decodeURIComponent(emoji)),
           ),
         )
-        .run();
+        ;
 
       pubsub.publish(`server:${channel!.serverId}`, {
         op: 0,
@@ -413,7 +413,7 @@ export function messageRoutes(
         .select()
         .from(messages)
         .where(and(eq(messages.id, messageId), eq(messages.channelId, channelId)))
-        .get();
+        .then(r => r[0]);
       if (!message) return reply.status(404).send({ error: "Message not found" });
 
       const now = new Date();
@@ -421,7 +421,7 @@ export function messageRoutes(
         .update(messages)
         .set({ pinnedAt: now, pinnedBy: request.user.sub })
         .where(eq(messages.id, messageId))
-        .run();
+        ;
 
       pubsub.publish(`server:${channel!.serverId}`, {
         op: 0,
@@ -443,7 +443,7 @@ export function messageRoutes(
         .update(messages)
         .set({ pinnedAt: null, pinnedBy: null })
         .where(and(eq(messages.id, messageId), eq(messages.channelId, channelId)))
-        .run();
+        ;
 
       pubsub.publish(`server:${channel!.serverId}`, {
         op: 0,
@@ -467,7 +467,7 @@ export function messageRoutes(
         .innerJoin(users, eq(messages.authorId, users.id))
         .where(and(eq(messages.channelId, channelId), sql`${messages.pinnedAt} IS NOT NULL`))
         .orderBy(desc(messages.pinnedAt))
-        .all();
+        ;
 
       const result = await Promise.all(
         rows.map(async (row) => {

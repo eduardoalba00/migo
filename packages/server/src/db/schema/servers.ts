@@ -1,22 +1,22 @@
-import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
+import { pgTable, text, timestamp } from "drizzle-orm/pg-core";
 import { users } from "./users.js";
 
-export const servers = sqliteTable("servers", {
+export const servers = pgTable("servers", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
   iconUrl: text("icon_url"),
   ownerId: text("owner_id")
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
-  createdAt: integer("created_at", { mode: "timestamp" })
+  createdAt: timestamp("created_at")
     .notNull()
     .$defaultFn(() => new Date()),
-  updatedAt: integer("updated_at", { mode: "timestamp" })
+  updatedAt: timestamp("updated_at")
     .notNull()
     .$defaultFn(() => new Date()),
 });
 
-export const serverMembers = sqliteTable("server_members", {
+export const serverMembers = pgTable("server_members", {
   id: text("id").primaryKey(),
   serverId: text("server_id")
     .notNull()
@@ -24,7 +24,7 @@ export const serverMembers = sqliteTable("server_members", {
   userId: text("user_id")
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
-  joinedAt: integer("joined_at", { mode: "timestamp" })
+  joinedAt: timestamp("joined_at")
     .notNull()
     .$defaultFn(() => new Date()),
 });

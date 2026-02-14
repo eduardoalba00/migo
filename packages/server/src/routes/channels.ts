@@ -44,7 +44,7 @@ export function channelRoutes(
         .select()
         .from(categories)
         .where(eq(categories.serverId, serverId))
-        .all();
+        ;
 
       const id = crypto.randomUUID();
       await db.insert(categories).values({
@@ -52,9 +52,9 @@ export function channelRoutes(
         serverId,
         name: parsed.data.name,
         position: existing.length,
-      }).run();
+      });
 
-      const category = (await db.select().from(categories).where(eq(categories.id, id)).get())!;
+      const category = (await db.select().from(categories).where(eq(categories.id, id)).then(r => r[0]))!;
 
       return reply.status(201).send({
         id: category.id,
@@ -77,13 +77,13 @@ export function channelRoutes(
         .select()
         .from(categories)
         .where(and(eq(categories.id, categoryId), eq(categories.serverId, serverId)))
-        .get();
+        .then(r => r[0]);
 
       if (!category) {
         return reply.status(404).send({ error: "Category not found" });
       }
 
-      await db.delete(categories).where(eq(categories.id, categoryId)).run();
+      await db.delete(categories).where(eq(categories.id, categoryId));
 
       return reply.status(204).send();
     });
@@ -108,7 +108,7 @@ export function channelRoutes(
           .select()
           .from(categories)
           .where(and(eq(categories.id, parsed.data.categoryId), eq(categories.serverId, serverId)))
-          .get();
+          .then(r => r[0]);
         if (!cat) {
           return reply.status(400).send({ error: "Category not found in this server" });
         }
@@ -119,7 +119,7 @@ export function channelRoutes(
         .select()
         .from(channels)
         .where(eq(channels.serverId, serverId))
-        .all();
+        ;
 
       const id = crypto.randomUUID();
       await db.insert(channels).values({
@@ -130,9 +130,9 @@ export function channelRoutes(
         type: parsed.data.type || "text",
         topic: parsed.data.topic || null,
         position: existing.length,
-      }).run();
+      });
 
-      const channel = (await db.select().from(channels).where(eq(channels.id, id)).get())!;
+      const channel = (await db.select().from(channels).where(eq(channels.id, id)).then(r => r[0]))!;
 
       const channelData = {
         id: channel.id,
@@ -167,14 +167,14 @@ export function channelRoutes(
         .from(categories)
         .where(eq(categories.serverId, serverId))
         .orderBy(asc(categories.position))
-        .all();
+        ;
 
       const allChannels = await db
         .select()
         .from(channels)
         .where(eq(channels.serverId, serverId))
         .orderBy(asc(channels.position))
-        .all();
+        ;
 
       const uncategorized = allChannels
         .filter((ch) => !ch.categoryId)
@@ -230,7 +230,7 @@ export function channelRoutes(
         .select()
         .from(channels)
         .where(and(eq(channels.id, channelId), eq(channels.serverId, serverId)))
-        .get();
+        .then(r => r[0]);
 
       if (!existing) {
         return reply.status(404).send({ error: "Channel not found" });
@@ -240,9 +240,9 @@ export function channelRoutes(
         .update(channels)
         .set(parsed.data)
         .where(eq(channels.id, channelId))
-        .run();
+        ;
 
-      const channel = (await db.select().from(channels).where(eq(channels.id, channelId)).get())!;
+      const channel = (await db.select().from(channels).where(eq(channels.id, channelId)).then(r => r[0]))!;
 
       const channelData = {
         id: channel.id,
@@ -276,13 +276,13 @@ export function channelRoutes(
         .select()
         .from(channels)
         .where(and(eq(channels.id, channelId), eq(channels.serverId, serverId)))
-        .get();
+        .then(r => r[0]);
 
       if (!channel) {
         return reply.status(404).send({ error: "Channel not found" });
       }
 
-      await db.delete(channels).where(eq(channels.id, channelId)).run();
+      await db.delete(channels).where(eq(channels.id, channelId));
 
       pubsub.publish(`server:${serverId}`, {
         op: 0,
@@ -306,14 +306,14 @@ export function channelRoutes(
         .select()
         .from(readStates)
         .where(and(eq(readStates.userId, request.user.sub), eq(readStates.channelId, channelId)))
-        .get();
+        .then(r => r[0]);
 
       if (existing) {
         await db
           .update(readStates)
           .set({ lastReadMessageId: body.messageId, mentionCount: 0 })
           .where(eq(readStates.id, existing.id))
-          .run();
+          ;
       } else {
         await db.insert(readStates).values({
           id: crypto.randomUUID(),
@@ -321,7 +321,7 @@ export function channelRoutes(
           channelId,
           lastReadMessageId: body.messageId,
           mentionCount: 0,
-        }).run();
+        });
       }
 
       return reply.status(200).send({ ok: true });

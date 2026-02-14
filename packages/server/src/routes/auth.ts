@@ -32,7 +32,7 @@ export function authRoutes(db: AppDatabase, authService: AuthService) {
 
       const { username, displayName, password } = parsed.data;
 
-      const existing = await db.select().from(users).where(eq(users.username, username)).get();
+      const existing = await db.select().from(users).where(eq(users.username, username)).then(r => r[0]);
       if (existing) {
         return reply.status(409).send({ error: "Username already taken" });
       }
@@ -50,9 +50,9 @@ export function authRoutes(db: AppDatabase, authService: AuthService) {
           createdAt: now,
           updatedAt: now,
         })
-        .run();
+        ;
 
-      const user = (await db.select().from(users).where(eq(users.id, id)).get())!;
+      const user = (await db.select().from(users).where(eq(users.id, id)).then(r => r[0]))!;
       const tokens = await authService.generateTokenPair(user.id, user.username);
 
       return reply.status(201).send({
@@ -70,7 +70,7 @@ export function authRoutes(db: AppDatabase, authService: AuthService) {
 
       const { username, password } = parsed.data;
 
-      const user = await db.select().from(users).where(eq(users.username, username)).get();
+      const user = await db.select().from(users).where(eq(users.username, username)).then(r => r[0]);
       if (!user) {
         return reply.status(401).send({ error: "Invalid username or password" });
       }
@@ -97,7 +97,7 @@ export function authRoutes(db: AppDatabase, authService: AuthService) {
 
       try {
         const payload = await authService.verifyRefreshToken(parsed.data.refreshToken);
-        const user = await db.select().from(users).where(eq(users.id, payload.sub)).get();
+        const user = await db.select().from(users).where(eq(users.id, payload.sub)).then(r => r[0]);
         if (!user) {
           return reply.status(401).send({ error: "User not found" });
         }
@@ -115,7 +115,7 @@ export function authRoutes(db: AppDatabase, authService: AuthService) {
 
     // GET /api/auth/me
     app.get(AUTH_ROUTES.ME, { preHandler: requireAuth }, async (request, reply) => {
-      const user = await db.select().from(users).where(eq(users.id, request.user.sub)).get();
+      const user = await db.select().from(users).where(eq(users.id, request.user.sub)).then(r => r[0]);
       if (!user) {
         return reply.status(404).send({ error: "User not found" });
       }
@@ -125,7 +125,7 @@ export function authRoutes(db: AppDatabase, authService: AuthService) {
 
     // PATCH /api/auth/me — update profile
     app.patch(AUTH_ROUTES.ME, { preHandler: requireAuth }, async (request, reply) => {
-      const user = await db.select().from(users).where(eq(users.id, request.user.sub)).get();
+      const user = await db.select().from(users).where(eq(users.id, request.user.sub)).then(r => r[0]);
       if (!user) {
         return reply.status(404).send({ error: "User not found" });
       }
@@ -143,15 +143,15 @@ export function authRoutes(db: AppDatabase, authService: AuthService) {
 
       updates.updatedAt = new Date();
 
-      await db.update(users).set(updates).where(eq(users.id, request.user.sub)).run();
+      await db.update(users).set(updates).where(eq(users.id, request.user.sub));
 
-      const updated = (await db.select().from(users).where(eq(users.id, request.user.sub)).get())!;
+      const updated = (await db.select().from(users).where(eq(users.id, request.user.sub)).then(r => r[0]))!;
       return reply.status(200).send({ user: userToPublic(updated) });
     });
 
     // POST /api/auth/change-password
     app.post("/api/auth/change-password", { preHandler: requireAuth }, async (request, reply) => {
-      const user = await db.select().from(users).where(eq(users.id, request.user.sub)).get();
+      const user = await db.select().from(users).where(eq(users.id, request.user.sub)).then(r => r[0]);
       if (!user) {
         return reply.status(404).send({ error: "User not found" });
       }
@@ -170,7 +170,7 @@ export function authRoutes(db: AppDatabase, authService: AuthService) {
       }
 
       const passwordHash = await authService.hashPassword(body.newPassword);
-      await db.update(users).set({ passwordHash, updatedAt: new Date() }).where(eq(users.id, request.user.sub)).run();
+      await db.update(users).set({ passwordHash, updatedAt: new Date() }).where(eq(users.id, request.user.sub));
 
       return reply.status(200).send({ message: "Password changed successfully" });
     });

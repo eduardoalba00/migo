@@ -1,8 +1,8 @@
-import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
+import { pgTable, text, timestamp } from "drizzle-orm/pg-core";
 import { servers } from "./servers.js";
 import { users } from "./users.js";
 
-export const bans = sqliteTable("bans", {
+export const bans = pgTable("bans", {
   id: text("id").primaryKey(),
   serverId: text("server_id")
     .notNull()
@@ -14,7 +14,7 @@ export const bans = sqliteTable("bans", {
   bannedBy: text("banned_by")
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
-  createdAt: integer("created_at", { mode: "timestamp" })
+  createdAt: timestamp("created_at")
     .notNull()
     .$defaultFn(() => new Date()),
 });

@@ -1,5 +1,5 @@
-import { createClient } from "@libsql/client";
-import { drizzle } from "drizzle-orm/libsql";
+import postgres from "postgres";
+import { drizzle } from "drizzle-orm/postgres-js";
 import * as usersSchema from "./schema/users.js";
 import * as serversSchema from "./schema/servers.js";
 import * as channelsSchema from "./schema/channels.js";
@@ -26,9 +26,8 @@ const schema = {
   ...readStatesSchema,
 };
 
-export function createDatabase(dbPath: string) {
-  const client = createClient({ url: `file:${dbPath}` });
-
+export function createDatabase(databaseUrl: string) {
+  const client = postgres(databaseUrl);
   const db = drizzle(client, { schema });
   return { db, client };
 }

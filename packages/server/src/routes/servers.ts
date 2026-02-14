@@ -52,7 +52,7 @@ export function serverRoutes(
         ownerId: request.user.sub,
         createdAt: now,
         updatedAt: now,
-      }).run();
+      });
 
       // Auto-add creator as member
       await db.insert(serverMembers).values({
@@ -60,7 +60,7 @@ export function serverRoutes(
         serverId,
         userId: request.user.sub,
         joinedAt: now,
-      }).run();
+      });
 
       // Auto-create "general" text channel
       await db.insert(channels).values({
@@ -69,7 +69,7 @@ export function serverRoutes(
         name: "general",
         type: "text",
         position: 0,
-      }).run();
+      });
 
       // Auto-create @everyone default role
       await db.insert(roles).values({
@@ -80,9 +80,9 @@ export function serverRoutes(
         permissions: Permission.SEND_MESSAGES,
         isDefault: true,
         createdAt: now,
-      }).run();
+      });
 
-      const server = (await db.select().from(servers).where(eq(servers.id, serverId)).get())!;
+      const server = (await db.select().from(servers).where(eq(servers.id, serverId)).then(r => r[0]))!;
 
       return reply.status(201).send({
         id: server.id,
@@ -101,7 +101,7 @@ export function serverRoutes(
         .from(serverMembers)
         .innerJoin(servers, eq(serverMembers.serverId, servers.id))
         .where(eq(serverMembers.userId, request.user.sub))
-        .all();
+        ;
 
       const result = memberships.map((row) => ({
         id: row.servers.id,
@@ -157,9 +157,9 @@ export function serverRoutes(
         .update(servers)
         .set({ ...parsed.data, updatedAt: new Date() })
         .where(eq(servers.id, serverId))
-        .run();
+        ;
 
-      const server = (await db.select().from(servers).where(eq(servers.id, serverId)).get())!;
+      const server = (await db.select().from(servers).where(eq(servers.id, serverId)).then(r => r[0]))!;
 
       return reply.send({
         id: server.id,
@@ -180,7 +180,7 @@ export function serverRoutes(
         return reply.status(403).send({ error: "Only the server owner can delete the server" });
       }
 
-      await db.delete(servers).where(eq(servers.id, serverId)).run();
+      await db.delete(servers).where(eq(servers.id, serverId));
 
       return reply.status(204).send();
     });
@@ -199,7 +199,7 @@ export function serverRoutes(
         .from(serverMembers)
         .innerJoin(users, eq(serverMembers.userId, users.id))
         .where(eq(serverMembers.serverId, serverId))
-        .all();
+        ;
 
       const result = members.map((row) => ({
         id: row.server_members.id,
@@ -230,7 +230,7 @@ export function serverRoutes(
             eq(serverMembers.userId, request.user.sub),
           ),
         )
-        .get();
+        .then(r => r[0]);
 
       if (!member) {
         return reply.status(404).send({ error: "Not a member of this server" });
@@ -239,7 +239,7 @@ export function serverRoutes(
       await db
         .delete(serverMembers)
         .where(eq(serverMembers.id, member.id))
-        .run();
+        ;
 
       pubsub.publish(`server:${serverId}`, {
         op: 0,
@@ -272,7 +272,7 @@ export function serverRoutes(
             eq(serverMembers.userId, userId),
           ),
         )
-        .get();
+        .then(r => r[0]);
 
       if (!member) {
         return reply.status(404).send({ error: "Member not found" });
@@ -281,7 +281,7 @@ export function serverRoutes(
       await db
         .delete(serverMembers)
         .where(eq(serverMembers.id, member.id))
-        .run();
+        ;
 
       pubsub.publish(`server:${serverId}`, {
         op: 0,
@@ -316,7 +316,7 @@ export function serverRoutes(
             eq(serverMembers.userId, userId),
           ),
         )
-        .run();
+        ;
 
       // Create ban record
       await db.insert(bans).values({
@@ -326,7 +326,7 @@ export function serverRoutes(
         reason: body?.reason || null,
         bannedBy: request.user.sub,
         createdAt: new Date(),
-      }).run();
+      });
 
       pubsub.publish(`server:${serverId}`, {
         op: 0,
@@ -349,7 +349,7 @@ export function serverRoutes(
       await db
         .delete(bans)
         .where(and(eq(bans.serverId, serverId), eq(bans.userId, userId)))
-        .run();
+        ;
 
       return reply.status(204).send();
     });
@@ -368,7 +368,7 @@ export function serverRoutes(
         .from(bans)
         .innerJoin(users, eq(bans.userId, users.id))
         .where(eq(bans.serverId, serverId))
-        .all();
+        ;
 
       return reply.send(
         allBans.map((row) => ({

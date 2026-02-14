@@ -96,7 +96,7 @@ export function uploadRoutes(
           size: buffer.length,
           url,
           createdAt: new Date(),
-        }).run();
+        });
 
         return reply.status(201).send({ id, url, filename: uniqueName, originalName: file.filename, mimeType: file.mimetype, size: buffer.length });
       }

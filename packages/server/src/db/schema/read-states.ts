@@ -1,7 +1,7 @@
-import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
+import { pgTable, text, integer } from "drizzle-orm/pg-core";
 import { users } from "./users.js";
 
-export const readStates = sqliteTable("read_states", {
+export const readStates = pgTable("read_states", {
   id: text("id").primaryKey(),
   userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   channelId: text("channel_id").notNull(),
