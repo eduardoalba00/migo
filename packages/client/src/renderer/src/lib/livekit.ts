@@ -2,6 +2,7 @@ import {
   Room,
   RoomEvent,
   Track,
+  VideoPreset,
   type RemoteParticipant,
   type RemoteTrackPublication,
   type RemoteTrack,
@@ -114,10 +115,11 @@ export class LiveKitManager {
         } as any,
       });
       const track = stream.getVideoTracks()[0];
-      track.contentHint = "detail";
+      track.contentHint = "motion";
       await this.room.localParticipant.publishTrack(track, {
         source: Track.Source.ScreenShare,
         name: "screen",
+        screenShareEncoding: new VideoPreset(2560, 1440, 12_000_000, 60).encoding,
       });
       // Notify callback so the local user sees their own screen share
       this.screenShareCallback?.(this.room.localParticipant.identity, track);
