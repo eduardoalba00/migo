@@ -24,16 +24,18 @@ pnpm db:migrate          # Apply migrations (tsx src/db/migrate.ts)
 
 No test framework is configured yet.
 
-## Centralized Deployment (`deploy/`)
+## Centralized Deployment (Railway)
 
-The `deploy/` directory contains production config for the centralized server at `migoserver.com`:
+The centralized server at `migoserver.com` runs on Railway:
 
-- **`docker-compose.yml`** — PostgreSQL + migo-server + Caddy (HTTPS reverse proxy). No LiveKit (uses LiveKit Cloud). No watchtower (CI/CD handles deploys).
-- **`Caddyfile`** — Reverse proxy config for `migoserver.com` → `migo-server:8080`. Caddy auto-provisions TLS.
-- **`.env.example`** — Production env template (JWT secrets, LiveKit Cloud creds, Postgres).
-- **`setup.sh`** — One-command VPS provisioning: installs Docker, downloads configs, generates secrets, starts services. Usage: `curl -fsSL .../deploy/setup.sh | bash`
+- **Node service** — Railpack auto-detects the pnpm monorepo and builds `@migo/server` via `pnpm --filter @migo/server` commands. Custom domain `migoserver.com` pointed to the Railway service.
+- **PostgreSQL** — Railway-managed Postgres service. `DATABASE_URL` is provided automatically via reference variable.
+- **Persistent storage** — Volume mounted at `/data/uploads` for file uploads (`UPLOAD_DIR=/data/uploads`).
+- **Voice** — LiveKit Cloud (no self-hosted LiveKit needed).
 
-CI/CD: The `deploy` job in `.github/workflows/release.yml` SSHs into the VPS after the Docker image is pushed and runs `docker compose pull && up -d`. Requires `VPS_HOST` and `VPS_SSH_KEY` GitHub secrets.
+Environment variables: `DATABASE_URL` (Railway Postgres ref), `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, `UPLOAD_DIR=/data/uploads`.
+
+CI/CD: Railway auto-deploys from the `main` branch — no SSH or manual deploy step. The `docker` job in `.github/workflows/release.yml` still pushes images to GHCR for self-hosters.
 
 The client ships with a default workspace pointing to `https://migoserver.com`. New users land directly on the login screen.
 

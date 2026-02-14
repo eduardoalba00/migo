@@ -1,3 +1,0 @@
-migoserver.com {
-    reverse_proxy migo-server:8080
-}
