@@ -35,7 +35,7 @@ function ScreenShareTile({ track, sharerName, onClick, showClickHint }: ScreenSh
         ref={videoRef}
         autoPlay
         playsInline
-        className="max-w-full max-h-full object-contain"
+        className="w-full h-full object-contain"
       />
       <div className="absolute top-2 left-2 bg-black/60 text-white text-xs font-medium px-2 py-1 rounded">
         {sharerName}
@@ -90,7 +90,7 @@ function FocusedView({
         ref={videoRef}
         autoPlay
         playsInline
-        className="max-w-full max-h-full object-contain"
+        className="w-full h-full object-contain"
       />
       <div className="absolute top-3 left-3 flex items-center gap-2">
         {showBackButton && (
