@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch --env-file=../../.env --conditions @migo/source src/index.ts",
-    "build": "tsc",
+    "build": "pnpm --filter @migo/shared build && tsc",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx --env-file=../../.env src/db/migrate.ts"
   },

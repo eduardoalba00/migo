@@ -1,6 +1,6 @@
 import type { WebSocket } from "ws";
 import { eq, and, inArray } from "drizzle-orm";
-import { WsOpcode, DispatchEvent, PROTOCOL_VERSION } from "@migo/shared";
+import { WsOpcode, DispatchEvent, PROTOCOL_VERSION, MIN_CLIENT_VERSION } from "@migo/shared";
 import type { AuthService } from "../services/auth.js";
 import type { AppDatabase } from "../db/index.js";
 import { serverMembers } from "../db/schema/servers.js";
@@ -13,6 +13,17 @@ import { handleVoiceStateUpdate, handleVoiceSignal, handleLeave } from "../voice
 
 const HEARTBEAT_INTERVAL = 30_000;
 const HEARTBEAT_TIMEOUT = 45_000;
+const CLOSE_CLIENT_OUTDATED = 4010;
+
+function isVersionAtLeast(version: string, minimum: string): boolean {
+  const v = version.split(".").map(Number);
+  const m = minimum.split(".").map(Number);
+  for (let i = 0; i < 3; i++) {
+    if ((v[i] || 0) > (m[i] || 0)) return true;
+    if ((v[i] || 0) < (m[i] || 0)) return false;
+  }
+  return true; // equal
+}
 
 export function handleConnection(
   socket: WebSocket,
@@ -44,6 +55,13 @@ export function handleConnection(
       clearTimeout(identifyTimeout);
 
       try {
+        // Check client version before auth
+        const clientVersion = msg.d?.version;
+        if (!clientVersion || !isVersionAtLeast(clientVersion, MIN_CLIENT_VERSION)) {
+          socket.close(CLOSE_CLIENT_OUTDATED, "Client outdated");
+          return;
+        }
+
         const payload = await authService.verifyAccessToken(msg.d?.token);
         userId = payload.sub;
         identified = true;

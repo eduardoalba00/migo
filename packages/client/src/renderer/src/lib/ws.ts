@@ -15,7 +15,7 @@ export class WebSocketManager {
   private dispatchHandler: DispatchHandler | null = null;
   private voiceSignalHandler: VoiceSignalHandler | null = null;
   private onStatusChange: ((connected: boolean) => void) | null = null;
-  private onVersionMismatch: ((serverVersion: string) => void) | null = null;
+  private onVersionMismatch: (() => void) | null = null;
   private intentionalClose = false;
 
   setUrl(url: string) {
@@ -46,7 +46,7 @@ export class WebSocketManager {
     this.voiceSignalHandler = handler;
   }
 
-  setVersionMismatchHandler(handler: (serverVersion: string) => void) {
+  setVersionMismatchHandler(handler: () => void) {
     this.onVersionMismatch = handler;
   }
 
@@ -68,7 +68,7 @@ export class WebSocketManager {
       this.ws!.send(
         JSON.stringify({
           op: WsOpcode.IDENTIFY,
-          d: { token: this.token },
+          d: { token: this.token, version: PROTOCOL_VERSION },
         }),
       );
     };
@@ -82,16 +82,7 @@ export class WebSocketManager {
       }
 
       if ((msg as any).op === WsOpcode.READY) {
-        const { heartbeatInterval, serverVersion } = (msg as any).d;
-
-        // Check major version compatibility
-        const clientMajor = PROTOCOL_VERSION.split(".")[0];
-        const serverMajor = serverVersion?.split(".")[0];
-        if (serverVersion && clientMajor !== serverMajor) {
-          this.onVersionMismatch?.(serverVersion);
-          this.disconnect();
-          return;
-        }
+        const { heartbeatInterval } = (msg as any).d;
 
         this.startHeartbeat(heartbeatInterval);
         this.reconnectAttempts = 0;
@@ -114,9 +105,14 @@ export class WebSocketManager {
       }
     };
 
-    this.ws.onclose = () => {
+    this.ws.onclose = (event) => {
       this.onStatusChange?.(false);
       this.stopHeartbeat();
+
+      if (event.code === 4010) {
+        this.onVersionMismatch?.();
+        return;
+      }
 
       if (!this.intentionalClose) {
         this.scheduleReconnect();

@@ -12,7 +12,6 @@ import { useDmStore } from "./dms";
 
 interface WsState {
   connected: boolean;
-  serverVersion: string | null;
   versionMismatch: boolean;
   connect: (token: string) => void;
   disconnect: () => void;
@@ -20,7 +19,6 @@ interface WsState {
 
 export const useWsStore = create<WsState>()((set) => ({
   connected: false,
-  serverVersion: null,
   versionMismatch: false,
 
   connect: (token) => {
@@ -28,8 +26,8 @@ export const useWsStore = create<WsState>()((set) => ({
       set({ connected });
     });
 
-    wsManager.setVersionMismatchHandler((serverVersion) => {
-      set({ serverVersion, versionMismatch: true, connected: false });
+    wsManager.setVersionMismatchHandler(() => {
+      set({ versionMismatch: true, connected: false });
     });
 
     wsManager.setDispatchHandler((event: WsDispatch) => {
