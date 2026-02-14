@@ -3,7 +3,7 @@
   "private": true,
   "packageManager": "pnpm@9.11.0",
   "scripts": {
-    "dev:server": "docker compose down migo-server watchtower && docker compose up -d postgres livekit && pnpm --filter @migo/server dev",
+    "dev:server": "docker compose up -d postgres livekit && pnpm --filter @migo/server dev",
     "dev:client": "pnpm --filter @migo/client dev",
     "build:server": "pnpm --filter @migo/server build",
     "build:client": "pnpm --filter @migo/client build",

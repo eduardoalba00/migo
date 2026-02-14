@@ -35,26 +35,20 @@ The centralized server at `migoserver.com` runs on Railway:
 
 Environment variables: `DATABASE_URL` (Railway Postgres ref), `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, `UPLOAD_DIR=/data/uploads`.
 
-CI/CD: Railway auto-deploys from the `main` branch — no SSH or manual deploy step. The `docker` job in `.github/workflows/release.yml` still pushes images to GHCR for self-hosters.
+CI/CD: Railway auto-deploys from the `main` branch — no SSH or manual deploy step.
 
 The client ships with a default workspace pointing to `https://migoserver.com`. New users land directly on the login screen.
 
-## Self-Hosted Docker Deployment
+## Host Your Own Server
 
-```bash
-# 1. Copy and fill in secrets
-cp .env.example .env
-# Edit .env — generate secrets with: node -e "console.log(crypto.randomBytes(32).toString('hex'))"
+You can deploy your own Migo server instance on Railway with LiveKit Cloud:
 
-# 2. Start all services
-docker compose up -d
-
-# 3. Stop
-docker compose down          # keeps data
-docker compose down -v       # removes volumes (fresh start)
-```
-
-Services: PostgreSQL 17, LiveKit (voice), migo-server (port 8080). The server image is pulled from GHCR (`ghcr.io/eduardoalba00/migo-server`). Watchtower automatically polls for new server images every 5 minutes. Migrations run automatically on startup. Data persists in Docker volumes (`pgdata`, `uploads`).
+1. **Railway project** — Create a new project, add a PostgreSQL service, and add a Node service from your GitHub fork/clone of this repo.
+2. **Build & start** — Railpack auto-detects the pnpm monorepo. Set the start command to `node packages/server/dist/index.js` if needed.
+3. **Environment variables** — Set `DATABASE_URL` (Railway Postgres reference variable), `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` (from [LiveKit Cloud](https://cloud.livekit.io)), and `UPLOAD_DIR=/data/uploads`.
+4. **Persistent storage** — Add a volume mounted at `/data/uploads` for file uploads.
+5. **Custom domain** — Point your domain to the Railway service.
+6. **Connect** — In the Migo desktop client, add a new workspace pointing to your server URL.
 
 ## Architecture
 

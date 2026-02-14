@@ -34,42 +34,5 @@ services:
         keys:
           ${LIVEKIT_API_KEY}: ${LIVEKIT_API_SECRET}
 
-  migo-server:
-    image: ghcr.io/eduardoalba00/migo-server:latest
-    restart: unless-stopped
-    labels:
-      - "com.centurylinklabs.watchtower.scope=migo"
-    depends_on:
-      postgres:
-        condition: service_healthy
-      livekit:
-        condition: service_started
-    ports:
-      - "8080:8080"
-    volumes:
-      - uploads:/data/uploads
-    environment:
-      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
-      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET}
-      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
-      LIVEKIT_URL: ws://livekit:7880
-      LIVEKIT_PUBLIC_URL: ws://localhost:7880
-      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY}
-      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET}
-      UPLOAD_DIR: /data/uploads
-
-  watchtower:
-    image: nickfedor/watchtower
-    restart: unless-stopped
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-    environment:
-      WATCHTOWER_POLL_INTERVAL: 300
-      WATCHTOWER_CLEANUP: "true"
-      WATCHTOWER_SCOPE: migo
-    labels:
-      - "com.centurylinklabs.watchtower.scope=migo"
-
 volumes:
   pgdata:
-  uploads:
