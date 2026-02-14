@@ -201,7 +201,24 @@ export const useVoiceStore = create<VoiceStoreState>()((set, get) => ({
   },
 
   toggleMute: () => {
-    const { isMuted, currentChannelId, currentServerId } = get();
+    const { isMuted, isDeafened, currentChannelId, currentServerId } = get();
+
+    // Unmuting while deafened → undeafen too
+    if (isMuted && isDeafened) {
+      livekitManager.setMicEnabled(true);
+      livekitManager.setDeafened(false);
+      playUnmuteSound();
+      set({ isMuted: false, isDeafened: false });
+
+      if (currentChannelId && currentServerId) {
+        wsManager.send({
+          op: WsOpcode.VOICE_STATE_UPDATE,
+          d: { channelId: currentChannelId, serverId: currentServerId, muted: false, deafened: false },
+        });
+      }
+      return;
+    }
+
     const newMuted = !isMuted;
     if (isMuted) {
       livekitManager.setMicEnabled(true);
@@ -215,7 +232,7 @@ export const useVoiceStore = create<VoiceStoreState>()((set, get) => ({
     if (currentChannelId && currentServerId) {
       wsManager.send({
         op: WsOpcode.VOICE_STATE_UPDATE,
-        d: { channelId: currentChannelId, serverId: currentServerId, muted: newMuted, deafened: get().isDeafened },
+        d: { channelId: currentChannelId, serverId: currentServerId, muted: newMuted, deafened: false },
       });
     }
   },
@@ -223,13 +240,22 @@ export const useVoiceStore = create<VoiceStoreState>()((set, get) => ({
   toggleDeafen: () => {
     const { isDeafened, currentChannelId, currentServerId } = get();
     const newDeafened = !isDeafened;
+
+    // Deafening → also mute. Undeafening → also unmute.
     livekitManager.setDeafened(newDeafened);
-    set({ isDeafened: newDeafened });
+    livekitManager.setMicEnabled(!newDeafened);
+    set({ isDeafened: newDeafened, isMuted: newDeafened });
+
+    if (newDeafened) {
+      playMuteSound();
+    } else {
+      playUnmuteSound();
+    }
 
     if (currentChannelId && currentServerId) {
       wsManager.send({
         op: WsOpcode.VOICE_STATE_UPDATE,
-        d: { channelId: currentChannelId, serverId: currentServerId, muted: get().isMuted, deafened: newDeafened },
+        d: { channelId: currentChannelId, serverId: currentServerId, muted: newDeafened, deafened: newDeafened },
       });
     }
   },
