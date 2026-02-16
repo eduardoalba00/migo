@@ -36,6 +36,7 @@ Everything runs on [Railway](https://railway.app) with automatic updates — no 
 
 | Variable | Value |
 |----------|-------|
+| `PORT` | `8080` |
 | `DATABASE_URL` | Railway PostgreSQL reference variable (e.g. `${{Postgres.DATABASE_URL}}`) |
 | `JWT_ACCESS_SECRET` | Random string (`openssl rand -hex 32`) |
 | `JWT_REFRESH_SECRET` | Different random string |
