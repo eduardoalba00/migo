@@ -119,7 +119,8 @@ export class LiveKitManager {
       await this.room.localParticipant.publishTrack(track, {
         source: Track.Source.ScreenShare,
         name: "screen",
-        screenShareEncoding: new VideoPreset(2560, 1440, 12_000_000, 60).encoding,
+        videoEncoding: { maxBitrate: 12_000_000, maxFramerate: 60 },
+        simulcast: false,
       });
       // Notify callback so the local user sees their own screen share
       this.screenShareCallback?.(this.room.localParticipant.identity, track);
