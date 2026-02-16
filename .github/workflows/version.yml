@@ -96,7 +96,10 @@ jobs:
 
   release:
     needs: [bump, docker]
-    runs-on: windows-latest
+    strategy:
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
     permissions:
       contents: write
     steps:
