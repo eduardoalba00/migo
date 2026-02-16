@@ -21,9 +21,6 @@ importers:
 
   packages/client:
     dependencies:
-      '@migo/screen-capture':
-        specifier: workspace:*
-        version: link:../screen-capture
       '@migo/shared':
         specifier: workspace:*
         version: link:../shared
