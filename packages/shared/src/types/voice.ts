@@ -5,22 +5,13 @@ export interface VoiceState {
   muted: boolean;
   deafened: boolean;
   screenSharing?: boolean;
-  /** mediasoup producerId for screen share consumers */
-  producerId?: string;
   /** Included in server→client broadcasts for display purposes */
   username?: string;
   displayName?: string;
   avatarUrl?: string | null;
 }
 
-export type VoiceSignalAction =
-  | "joinVoice"
-  | "screenGetCapabilities"
-  | "screenCreateTransport"
-  | "screenConnectTransport"
-  | "screenProduce"
-  | "screenConsume"
-  | "screenResumeConsumer";
+export type VoiceSignalAction = "joinVoice";
 
 export interface LiveKitCredentials {
   token: string;

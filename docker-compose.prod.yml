@@ -39,8 +39,6 @@ services:
     restart: unless-stopped
     ports:
       - "8080:8080"
-      - "40000-40100:40000-40100/udp"
-      - "40000-40100:40000-40100/tcp"
     depends_on:
       postgres:
         condition: service_healthy
@@ -56,9 +54,6 @@ services:
       LIVEKIT_API_KEY: ${LIVEKIT_API_KEY}
       LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET}
       UPLOAD_DIR: /data/uploads
-      MEDIASOUP_ANNOUNCED_IP: ${MEDIASOUP_ANNOUNCED_IP}
-      MEDIASOUP_MIN_PORT: "40000"
-      MEDIASOUP_MAX_PORT: "40100"
     volumes:
       - uploads:/data/uploads
     labels:

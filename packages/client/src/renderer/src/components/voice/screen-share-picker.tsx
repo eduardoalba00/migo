@@ -2,12 +2,14 @@ import { useEffect, useState } from "react";
 import { Monitor } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { useVoiceStore } from "@/stores/voice";
-import type { CapturePreset } from "@/lib/screen-capture";
+
+export type CapturePreset = "720p30" | "1080p30" | "1080p60" | "1440p60";
 
 const qualityOptions: { value: CapturePreset; label: string }[] = [
+  { value: "720p30", label: "720p 30fps" },
+  { value: "1080p30", label: "1080p 30fps" },
   { value: "1080p60", label: "1080p 60fps" },
   { value: "1440p60", label: "1440p 60fps" },
-  { value: "4k30", label: "4K 30fps" },
 ];
 
 export function ScreenSharePicker() {

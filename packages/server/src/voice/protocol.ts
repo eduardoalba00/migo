@@ -6,7 +6,6 @@ import { users } from "../db/schema/users.js";
 import type { ConnectionManager } from "../ws/connection.js";
 import type { LiveKitService } from "./livekit.js";
 import type { VoiceStateManager } from "./state.js";
-import type { MediasoupManager } from "../screenshare/mediasoup-manager.js";
 
 function send(socket: WebSocket, data: unknown): void {
   if (socket.readyState === socket.OPEN) {
@@ -22,13 +21,12 @@ export function handleVoiceStateUpdate(
   voiceState: VoiceStateManager,
   connectionManager: ConnectionManager,
   db: AppDatabase,
-  mediasoup: MediasoupManager,
 ): void {
   const { channelId, serverId, muted, deafened } = msg.d ?? {};
 
   // Handle leave first — serverId not needed since state manager tracks it
   if (!channelId) {
-    handleLeave(userId, voiceState, connectionManager, db, mediasoup);
+    handleLeave(userId, voiceState, connectionManager, db);
     return;
   }
 
@@ -61,7 +59,6 @@ export function handleLeave(
   voiceState: VoiceStateManager,
   connectionManager: ConnectionManager,
   db: AppDatabase,
-  mediasoup: MediasoupManager,
 ): void {
   const participant = voiceState.getParticipant(userId);
   const wasScreenSharing = participant?.screenSharing;
@@ -70,9 +67,6 @@ export function handleLeave(
   if (!result) return;
 
   const { channelId, serverId } = result;
-
-  // Clean up mediasoup resources for this user
-  mediasoup.cleanupUser(channelId, userId);
 
   // Broadcast screen share stop if they were sharing
   if (wasScreenSharing) {
@@ -95,7 +89,6 @@ export async function handleVoiceSignal(
   voiceState: VoiceStateManager,
   connectionManager: ConnectionManager,
   db: AppDatabase,
-  mediasoup: MediasoupManager,
 ): Promise<void> {
   const { requestId, action, data } = msg.d ?? {};
   if (!requestId || !action) return;
@@ -113,7 +106,6 @@ export async function handleVoiceSignal(
           userId,
           channelId: updated.channelId,
           serverId: updated.serverId,
-          producerId: data?.producerId,
         },
       });
       broadcastVoiceState(connectionManager, db, updated.serverId, userId, updated.channelId, false, voiceState);
@@ -123,10 +115,6 @@ export async function handleVoiceSignal(
 
   if (action === "stopScreenShare") {
     if (!participant) return;
-    // Close the producer on the server side
-    if (data?.producerId) {
-      mediasoup.closeProducer(participant.channelId, data.producerId);
-    }
     const updated = voiceState.setScreenSharing(userId, false);
     if (updated) {
       connectionManager.broadcastToServer(updated.serverId, {
@@ -159,162 +147,6 @@ export async function handleVoiceSignal(
       send(socket, {
         op: WsOpcode.VOICE_SIGNAL,
         d: { requestId, action, error: err.message || "Failed to generate token" },
-      });
-    }
-    return;
-  }
-
-  // --- mediasoup screen share signaling ---
-
-  if (action === "screenGetCapabilities") {
-    if (!participant) {
-      send(socket, {
-        op: WsOpcode.VOICE_SIGNAL,
-        d: { requestId, action, error: "Not in a voice channel" },
-      });
-      return;
-    }
-    try {
-      const rtpCapabilities = await mediasoup.ensureRoom(participant.channelId);
-      send(socket, {
-        op: WsOpcode.VOICE_SIGNAL,
-        d: { requestId, action, data: { rtpCapabilities } },
-      });
-    } catch (err: any) {
-      send(socket, {
-        op: WsOpcode.VOICE_SIGNAL,
-        d: { requestId, action, error: err.message },
-      });
-    }
-    return;
-  }
-
-  if (action === "screenCreateTransport") {
-    if (!participant) {
-      send(socket, {
-        op: WsOpcode.VOICE_SIGNAL,
-        d: { requestId, action, error: "Not in a voice channel" },
-      });
-      return;
-    }
-    try {
-      const transportParams = await mediasoup.createTransport(participant.channelId, userId);
-      send(socket, {
-        op: WsOpcode.VOICE_SIGNAL,
-        d: { requestId, action, data: transportParams },
-      });
-    } catch (err: any) {
-      send(socket, {
-        op: WsOpcode.VOICE_SIGNAL,
-        d: { requestId, action, error: err.message },
-      });
-    }
-    return;
-  }
-
-  if (action === "screenConnectTransport") {
-    if (!participant) {
-      send(socket, {
-        op: WsOpcode.VOICE_SIGNAL,
-        d: { requestId, action, error: "Not in a voice channel" },
-      });
-      return;
-    }
-    try {
-      await mediasoup.connectTransport(
-        participant.channelId,
-        data.transportId,
-        data.dtlsParameters,
-      );
-      send(socket, {
-        op: WsOpcode.VOICE_SIGNAL,
-        d: { requestId, action, data: { connected: true } },
-      });
-    } catch (err: any) {
-      send(socket, {
-        op: WsOpcode.VOICE_SIGNAL,
-        d: { requestId, action, error: err.message },
-      });
-    }
-    return;
-  }
-
-  if (action === "screenProduce") {
-    if (!participant) {
-      send(socket, {
-        op: WsOpcode.VOICE_SIGNAL,
-        d: { requestId, action, error: "Not in a voice channel" },
-      });
-      return;
-    }
-    try {
-      const producerId = await mediasoup.produce(
-        participant.channelId,
-        userId,
-        data.transportId,
-        data.kind,
-        data.rtpParameters,
-      );
-      send(socket, {
-        op: WsOpcode.VOICE_SIGNAL,
-        d: { requestId, action, data: { producerId } },
-      });
-    } catch (err: any) {
-      send(socket, {
-        op: WsOpcode.VOICE_SIGNAL,
-        d: { requestId, action, error: err.message },
-      });
-    }
-    return;
-  }
-
-  if (action === "screenConsume") {
-    if (!participant) {
-      send(socket, {
-        op: WsOpcode.VOICE_SIGNAL,
-        d: { requestId, action, error: "Not in a voice channel" },
-      });
-      return;
-    }
-    try {
-      const consumerParams = await mediasoup.consume(
-        participant.channelId,
-        userId,
-        data.transportId,
-        data.producerId,
-        data.rtpCapabilities,
-      );
-      send(socket, {
-        op: WsOpcode.VOICE_SIGNAL,
-        d: { requestId, action, data: consumerParams },
-      });
-    } catch (err: any) {
-      send(socket, {
-        op: WsOpcode.VOICE_SIGNAL,
-        d: { requestId, action, error: err.message },
-      });
-    }
-    return;
-  }
-
-  if (action === "screenResumeConsumer") {
-    if (!participant) {
-      send(socket, {
-        op: WsOpcode.VOICE_SIGNAL,
-        d: { requestId, action, error: "Not in a voice channel" },
-      });
-      return;
-    }
-    try {
-      await mediasoup.resumeConsumer(participant.channelId, data.consumerId);
-      send(socket, {
-        op: WsOpcode.VOICE_SIGNAL,
-        d: { requestId, action, data: { resumed: true } },
-      });
-    } catch (err: any) {
-      send(socket, {
-        op: WsOpcode.VOICE_SIGNAL,
-        d: { requestId, action, error: err.message },
       });
     }
     return;

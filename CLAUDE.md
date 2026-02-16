@@ -50,10 +50,10 @@ Production runs via `docker-compose.prod.yml` with all services in one compose s
 
 - **postgres** — `postgres:17-alpine` with a persistent volume. Server connects via internal DNS (`postgres:5432`).
 - **livekit** — Self-hosted `livekit/livekit-server`. Ports 7880 (API/WS), 7881 (TCP), 50000-50100/udp (WebRTC). Server connects internally (`ws://livekit:7880`); clients connect via `LIVEKIT_PUBLIC_URL`.
-- **server** — `ghcr.io/eduardoalba00/migo-server:latest`. Port 8080 (HTTP/WS), 40000-40100 (mediasoup UDP+TCP). Persistent volume at `/data/uploads`.
+- **server** — `ghcr.io/eduardoalba00/migo-server:latest`. Port 8080 (HTTP/WS). Persistent volume at `/data/uploads`.
 - **watchtower** — Monitors the server container for new GHCR images, auto-restarts on update (polls every 5 minutes).
 
-Environment variables are in `.env.prod` (see `.env.prod.example`): `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, `LIVEKIT_PUBLIC_URL` (public WS URL for clients), `MEDIASOUP_ANNOUNCED_IP` (server's public IP for NAT traversal).
+Environment variables are in `.env.prod` (see `.env.prod.example`): `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, `LIVEKIT_PUBLIC_URL` (public WS URL for clients).
 
 CI/CD: GitHub Actions builds the GHCR image on push to `main`. Watchtower pulls the latest image automatically — no manual deploy step.
 
@@ -63,7 +63,7 @@ Start: `docker compose -f docker-compose.prod.yml --env-file .env.prod up -d`
 
 **pnpm monorepo** with four packages:
 
-- **`@migo/server`** — Fastify 5 REST API + WebSocket server. PostgreSQL via Drizzle ORM + postgres.js. Voice via LiveKit (token service). Screen sharing via mediasoup SFU. Auth via argon2 + JWT (jose).
+- **`@migo/server`** — Fastify 5 REST API + WebSocket server. PostgreSQL via Drizzle ORM + postgres.js. Voice + screen sharing via LiveKit. Auth via argon2 + JWT (jose).
 - **`@migo/client`** — Electron 40 desktop app. React 19 renderer built with electron-vite. State management with Zustand. Styling with Tailwind CSS 4 (OKLCH color tokens). UI primitives from Radix UI.
 - **`@migo/shared`** — Zod schemas, TypeScript types, WebSocket protocol definitions, and API route constants shared between client and server.
 - **`@migo/screen-capture`** — Rust native addon (NAPI-RS) for cross-platform screen/window capture using the `scap` crate.
@@ -82,16 +82,15 @@ The shared package uses a custom export condition `@migo/source` so dev tools (t
 | `middleware/` | Bearer token auth extraction |
 | `ws/` | WebSocket protocol: connection registry, opcode handler, EventEmitter-based pubsub |
 | `voice/` | LiveKit token service, voice state tracking |
-| `screenshare/` | mediasoup SFU manager for screen sharing (WebRtcServer on single TCP port) |
 
-Config is env-based (`config.ts`): `PORT` (default 3000), `HOST`, `DATABASE_URL`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, `MEDIASOUP_PORT` (default 40000). Defaults work for local dev (auto-generated JWT secrets, `postgres://localhost:5432/migo`). LiveKit dev server: `docker run --rm -p 7890:7880 -p 7881:7881 -p 7882:7882/udp livekit/livekit-server --dev --bind 0.0.0.0`.
+Config is env-based (`config.ts`): `PORT` (default 3000), `HOST`, `DATABASE_URL`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`. Defaults work for local dev (auto-generated JWT secrets, `postgres://localhost:5432/migo`). LiveKit dev server: `docker run --rm -p 7890:7880 -p 7881:7881 -p 7882:7882/udp livekit/livekit-server --dev --bind 0.0.0.0`.
 
 ### Client structure (`packages/client/src/renderer/src/`)
 
 | Directory | Purpose |
 |-----------|---------|
 | `stores/` | Zustand stores (auth, workspace, servers, channels, messages, voice, ws) |
-| `lib/` | HTTP client (`api.ts`), WebSocket manager (`ws.ts`), LiveKit client (`livekit.ts`), screen share manager (`screen-share.ts`) |
+| `lib/` | HTTP client (`api.ts`), WebSocket manager (`ws.ts`), LiveKit client (`livekit.ts`) |
 | `components/` | React components organized by domain (auth, servers, channels, messages, voice, layout, ui) |
 | `pages/` | Top-level views: auth, workspace picker, app shell |
 

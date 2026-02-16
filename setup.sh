@@ -67,9 +67,6 @@ JWT_REFRESH_SECRET=$JWT_REFRESH_SECRET
 LIVEKIT_API_KEY=$LIVEKIT_API_KEY
 LIVEKIT_API_SECRET=$LIVEKIT_API_SECRET
 LIVEKIT_PUBLIC_URL=ws://$PUBLIC_IP:7880
-
-# mediasoup (screen sharing)
-MEDIASOUP_ANNOUNCED_IP=$PUBLIC_IP
 EOF
 
   echo
@@ -80,8 +77,7 @@ echo
 echo "Required ports (open these on your firewall):"
 echo "  8080        TCP   — Migo API + WebSocket"
 echo "  7880-7881   TCP   — LiveKit signaling"
-echo "  40000-40100 TCP+UDP — Screen sharing (mediasoup)"
-echo "  50000-50100 UDP   — Voice (LiveKit WebRTC)"
+echo "  50000-50100 UDP   — Voice + Screen Share (LiveKit WebRTC)"
 echo
 
 read -rp "Start Migo now? (Y/n): " start

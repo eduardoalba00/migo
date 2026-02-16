@@ -4,6 +4,12 @@ import { is } from "@electron-toolkit/utils";
 import electronUpdater from "electron-updater";
 const { autoUpdater } = electronUpdater;
 
+// Enable hardware-accelerated video encoding/decoding for WebRTC
+app.commandLine.appendSwitch("enable-features", "WebRtcHWH264Encoding,WebRtcHWVP9Encoding,PlatformHEVCEncoderSupport");
+app.commandLine.appendSwitch("enable-gpu-rasterization");
+app.commandLine.appendSwitch("enable-accelerated-video-decode");
+app.commandLine.appendSwitch("enable-accelerated-video-encode");
+
 if (process.env.MIGO_INSTANCE) {
   app.setPath("userData", app.getPath("userData") + "-" + process.env.MIGO_INSTANCE);
 }

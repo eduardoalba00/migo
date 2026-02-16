@@ -82,9 +82,6 @@ JWT_REFRESH_SECRET=$JwtRefreshSecret
 LIVEKIT_API_KEY=$LivekitApiKey
 LIVEKIT_API_SECRET=$LivekitApiSecret
 LIVEKIT_PUBLIC_URL=ws://${PublicIP}:7880
-
-# mediasoup (screen sharing)
-MEDIASOUP_ANNOUNCED_IP=$PublicIP
 "@ | Set-Content -Path $EnvFile -NoNewline
 
     Write-Host
@@ -95,8 +92,7 @@ Write-Host
 Write-Host "Required ports (open these on your firewall):" -ForegroundColor Yellow
 Write-Host "  8080        TCP      - Migo API + WebSocket"
 Write-Host "  7880-7881   TCP      - LiveKit signaling"
-Write-Host "  40000-40100 TCP+UDP  - Screen sharing (mediasoup)"
-Write-Host "  50000-50100 UDP      - Voice (LiveKit WebRTC)"
+Write-Host "  50000-50100 UDP      - Voice + Screen Share (LiveKit WebRTC)"
 Write-Host
 
 $start = Read-Host "Start Migo now? (Y/n)"

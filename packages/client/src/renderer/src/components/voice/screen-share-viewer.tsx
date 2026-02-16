@@ -2,27 +2,54 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { Maximize2, Minimize2, ArrowLeft } from "lucide-react";
 import { useVoiceStore } from "@/stores/voice";
 
-function useTrackStats(track: MediaStreamTrack) {
+/**
+ * Measures actual FPS + resolution from the display video element itself.
+ * Uses requestVideoFrameCallback on the real video — no hidden video needed.
+ */
+function useVideoStats(videoRef: React.RefObject<HTMLVideoElement | null>) {
   const [stats, setStats] = useState<{ width: number; height: number; fps: number } | null>(null);
 
   useEffect(() => {
-    const update = () => {
-      const s = track.getSettings();
-      if (s.width && s.height) {
-        setStats({ width: s.width, height: s.height, fps: s.frameRate ?? 0 });
-      }
+    const video = videoRef.current;
+    if (!video) return;
+
+    let frameCount = 0;
+    let disposed = false;
+
+    const countFrame = () => {
+      if (disposed) return;
+      frameCount++;
+      video.requestVideoFrameCallback(countFrame);
     };
-    // Settings may not be available immediately on remote tracks
-    update();
-    const id = setInterval(update, 2000);
-    return () => clearInterval(id);
-  }, [track]);
+    video.requestVideoFrameCallback(countFrame);
+
+    const id = setInterval(() => {
+      const fps = frameCount;
+      frameCount = 0;
+      const w = video.videoWidth;
+      const h = video.videoHeight;
+      if (w && h) {
+        setStats({ width: w, height: h, fps });
+      }
+    }, 1000);
+
+    return () => {
+      disposed = true;
+      clearInterval(id);
+    };
+  }, [videoRef]);
 
   return stats;
 }
 
-function StatsOverlay({ track, className }: { track: MediaStreamTrack; className?: string }) {
-  const stats = useTrackStats(track);
+function StatsOverlay({
+  videoRef,
+  className,
+}: {
+  videoRef: React.RefObject<HTMLVideoElement | null>;
+  className?: string;
+}) {
+  const stats = useVideoStats(videoRef);
   if (!stats) return null;
 
   return (
@@ -71,7 +98,7 @@ function ScreenShareTile({ track, sharerName, onClick, showClickHint }: ScreenSh
       <div className="absolute top-2 left-2 bg-black/60 text-white text-xs font-medium px-2 py-1 rounded">
         {sharerName}
       </div>
-      <StatsOverlay track={track} className="absolute top-2 right-2" />
+      <StatsOverlay videoRef={videoRef} className="absolute top-2 right-2" />
       {showClickHint && (
         <div className="absolute inset-0 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity bg-black/20">
           <span className="bg-black/70 text-white text-sm px-3 py-1.5 rounded-md">
@@ -140,7 +167,7 @@ function FocusedView({
         </div>
       </div>
       <div className="absolute top-3 right-3 flex items-center gap-1">
-        <StatsOverlay track={track} />
+        <StatsOverlay videoRef={videoRef} />
         <button
           onClick={onToggleFullscreen}
           className="bg-black/60 hover:bg-black/80 text-white p-1.5 rounded transition-colors"

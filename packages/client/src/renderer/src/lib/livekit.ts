@@ -6,8 +6,14 @@ import {
   type RemoteTrackPublication,
   type RemoteTrack,
 } from "livekit-client";
+import { ScreenEncoder, ScreenDecoder, SCREEN_DATA_TOPIC, type ScreenEncoderConfig } from "./screen-codec";
 
 export type SpeakingChangeCallback = (speakingUserIds: Set<string>) => void;
+export type ScreenTrackCallback = (
+  participantIdentity: string,
+  track: MediaStreamTrack,
+  action: "add" | "remove",
+) => void;
 
 // Discord-style VAD thresholds
 const SPEAKING_THRESHOLD = 15; // frequency bin average (0-255 range)
@@ -22,8 +28,13 @@ interface AudioAnalysis {
 export class LiveKitManager {
   private room: Room | null = null;
   private speakingCallback: SpeakingChangeCallback | null = null;
+  private screenTrackCallback: ScreenTrackCallback | null = null;
   private selectedOutputDeviceId: string | null = null;
   private userVolumes = new Map<string, number>();
+
+  // Custom screen share encoding (WebCodecs + DataChannel)
+  private screenEncoder: ScreenEncoder | null = null;
+  private screenDecoders = new Map<string, ScreenDecoder>();
 
   // VAD state
   private audioContext: AudioContext | null = null;
@@ -39,10 +50,14 @@ export class LiveKitManager {
     this.speakingCallback = cb;
   }
 
+  setScreenTrackCallback(cb: ScreenTrackCallback | null) {
+    this.screenTrackCallback = cb;
+  }
+
   async connect(token: string, url: string): Promise<void> {
     this.room = new Room({
       adaptiveStream: false,
-      dynacast: true,
+      dynacast: false,
     });
 
     this.audioContext = new AudioContext();
@@ -68,12 +83,56 @@ export class LiveKitManager {
       }
     }
     this.attachedAudioElements.clear();
+
+    // Clean up screen share encoder/decoders
+    this.screenEncoder?.stop();
+    this.screenEncoder = null;
+    for (const decoder of this.screenDecoders.values()) {
+      decoder.stop();
+    }
+    this.screenDecoders.clear();
+
     if (this.room) {
       await this.room.disconnect();
       this.room = null;
     }
     this.speakingUsers.clear();
     this.lastSpokeAt.clear();
+  }
+
+  // --- Custom screen share via WebCodecs + DataChannel ---
+
+  async publishScreenEncoded(
+    track: MediaStreamTrack,
+    config: ScreenEncoderConfig,
+  ): Promise<void> {
+    if (!this.room) throw new Error("Not connected to a room");
+
+    this.screenEncoder = new ScreenEncoder((chunks) => {
+      for (const chunk of chunks) {
+        this.room?.localParticipant.publishData(chunk, {
+          reliable: true,
+          topic: SCREEN_DATA_TOPIC,
+        });
+      }
+    });
+
+    await this.screenEncoder.start(track, config);
+  }
+
+  stopScreenEncoded(): void {
+    this.screenEncoder?.stop();
+    this.screenEncoder = null;
+  }
+
+  // Called when a remote participant stops screen sharing (via WS signal)
+  removeScreenDecoder(participantIdentity: string): void {
+    const decoder = this.screenDecoders.get(participantIdentity);
+    if (decoder) {
+      this.screenTrackCallback?.(participantIdentity, decoder.getTrack(), "remove");
+      decoder.stop();
+      this.screenDecoders.delete(participantIdentity);
+    }
   }
 
   async setMicEnabled(enabled: boolean): Promise<void> {
@@ -254,6 +313,8 @@ export class LiveKitManager {
         }
         this.attachedAudioElements.delete(participant.identity);
       }
+      // Clean up screen decoder if participant was sharing
+      this.removeScreenDecoder(participant.identity);
     });
 
     this.room.on(
@@ -288,6 +349,26 @@ export class LiveKitManager {
           this.attachedAudioElements.delete(participant.identity);
           this.removeAnalyser(participant.identity);
         }
+      },
+    );
+
+    // Handle incoming screen share frames via DataChannel
+    this.room.on(
+      RoomEvent.DataReceived,
+      (payload: Uint8Array, participant?: RemoteParticipant, _kind?: unknown, topic?: string) => {
+        if (topic !== SCREEN_DATA_TOPIC || !participant) return;
+
+        const identity = participant.identity;
+
+        // Create decoder on first packet from this participant
+        if (!this.screenDecoders.has(identity)) {
+          const decoder = new ScreenDecoder();
+          this.screenDecoders.set(identity, decoder);
+          // Emit the output track to the voice store
+          this.screenTrackCallback?.(identity, decoder.getTrack(), "add");
+        }
+
+        this.screenDecoders.get(identity)!.feedChunk(payload);
       },
     );
   }

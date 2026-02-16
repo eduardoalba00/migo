@@ -22,7 +22,7 @@ services:
     ports:
       - "7890:7880"
       - "7891:7881"
-      - "50200-50300:50000-50100/udp"
+      - "50000-50100:50000-50100/udp"
     environment:
       LIVEKIT_CONFIG: |
         port: 7880
@@ -30,7 +30,9 @@ services:
           tcp_port: 7881
           port_range_start: 50000
           port_range_end: 50100
-          use_external_ip: true
+          use_external_ip: false
+          node_ip: ${LIVEKIT_NODE_IP:-192.168.1.171}
+          stun_servers: []
         keys:
           ${LIVEKIT_API_KEY}: ${LIVEKIT_API_SECRET}
 
