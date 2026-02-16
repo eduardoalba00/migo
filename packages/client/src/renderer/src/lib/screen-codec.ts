@@ -242,11 +242,6 @@ export class ScreenEncoder {
           await this.configureFromFrame(frame.displayWidth, frame.displayHeight);
         }
 
-        if (this.encoder.encodeQueueSize > 5) {
-          frame.close();
-          continue;
-        }
-
         const keyFrame = this.frameIndex % this.keyframeEvery === 0;
         this.frameIndex++;
 
@@ -322,8 +317,6 @@ export class ScreenDecoder {
       if (!parsed.isKey) return;
       this.receivedKeyframe = true;
     }
-
-    if (this.decoder!.decodeQueueSize > 5) return;
 
     try {
       this.decoder!.decode(
