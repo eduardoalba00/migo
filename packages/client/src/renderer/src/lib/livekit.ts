@@ -110,6 +110,7 @@ export class LiveKitManager {
             chromeMediaSourceId: sourceId,
             maxWidth: 2560,
             maxHeight: 1440,
+            minFrameRate: 60,
             maxFrameRate: 60,
           },
         } as any,
