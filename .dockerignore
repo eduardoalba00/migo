@@ -6,4 +6,6 @@ out
 *.md
 .env*
 packages/client
+!packages/client/package.json
 packages/screen-capture
+!packages/screen-capture/package.json
