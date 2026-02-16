@@ -10,7 +10,7 @@
     "dev:client2": "cross-env MIGO_INSTANCE=2 pnpm --filter @migo/client dev",
     "db:generate": "pnpm --filter @migo/server db:generate",
     "db:migrate": "pnpm --filter @migo/server db:migrate",
-    "release": "node -e \"const v=require('./packages/client/package.json').version; const{execSync}=require('child_process'); console.log('Triggering release v'+v+'...'); execSync('gh workflow run release.yml -f version='+v, {stdio:'inherit'}); console.log('Release workflow started. Track at: https://github.com/eduardoalba00/migo/actions')\""
+    "ship": "git checkout main && git merge dev && git push origin main && git checkout dev"
   },
   "dependencies": {
     "electron": "^40.2.1"

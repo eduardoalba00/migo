@@ -26,32 +26,15 @@ No test framework is configured yet.
 
 ## Versioning & Release Pipeline
 
-### Automatic version bumps (`.github/workflows/version.yml`)
+Everything is in a single workflow: `.github/workflows/version.yml`. Every push to `main` (except `chore(version):` commits) runs three jobs in sequence:
 
-Every push to `main` (except `chore(version):` commits) triggers an automatic version bump:
+1. **bump** — Determines bump type from the commit message (`feat!:` → major, `feat:` → minor, else → patch). Bumps version in all package.json files + `PROTOCOL_VERSION`, commits as `chore(version): vX.Y.Z`, tags, and pushes.
+2. **docker** — Builds the Dockerfile and pushes to GHCR as `ghcr.io/eduardoalba00/migo-server:<version>` and `:latest`.
+3. **release** — Checks out the version tag, builds the Electron client on Windows, and publishes to GitHub Releases via electron-builder.
 
-- `feat!:` or `BREAKING CHANGE` → **major** bump
-- `feat:` → **minor** bump
-- Everything else → **patch** bump
+To deploy: `pnpm ship` (merges `dev` → `main`, pushes, switches back to `dev`).
 
-The workflow bumps the version in all three `package.json` files + `PROTOCOL_VERSION` in `@migo/shared`, commits as `chore(version): vX.Y.Z`, creates a git tag `vX.Y.Z`, and pushes both.
-
-### Docker image publishing
-
-The same `version.yml` workflow has a second job (`docker`) that runs after the version bump. It builds the `Dockerfile` and pushes to GHCR as:
-- `ghcr.io/eduardoalba00/migo-server:<version>`
-- `ghcr.io/eduardoalba00/migo-server:latest`
-
-Self-hosted servers pull the Docker image instead of forking the repo. The `:latest` tag always matches the central server.
-
-**Important:** GitHub Actions using `GITHUB_TOKEN` cannot trigger other workflows. That's why Docker publishing is a job inside `version.yml` rather than a separate workflow triggered by tags.
-
-### Client releases (`.github/workflows/release.yml`)
-
-Manually triggered via `workflow_dispatch`. Builds the Electron app and publishes to GitHub Releases. Trigger with:
-```bash
-pnpm release  # Triggers release.yml with the current client version
-```
+**Important:** All three jobs use `GITHUB_TOKEN` and live in a single workflow because `GITHUB_TOKEN` cannot trigger other workflows.
 
 ### Minimum client version
 

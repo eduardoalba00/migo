@@ -93,3 +93,29 @@ jobs:
           tags: |
             ghcr.io/${{ github.repository_owner }}/migo-server:${{ needs.bump.outputs.version }}
             ghcr.io/${{ github.repository_owner }}/migo-server:latest
+
+  release:
+    needs: [bump, docker]
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: v${{ needs.bump.outputs.version }}
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install
+
+      - name: Build
+        run: pnpm build:client
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: pnpm --filter @migo/client exec electron-builder --publish always
