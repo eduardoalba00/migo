@@ -49,7 +49,7 @@ export class LiveKitManager {
 
   async connect(token: string, url: string): Promise<void> {
     this.room = new Room({
-      adaptiveStream: true,
+      adaptiveStream: false,
       dynacast: true,
     });
 
