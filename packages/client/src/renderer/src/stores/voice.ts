@@ -441,9 +441,11 @@ export const useVoiceStore = create<VoiceStoreState>()((set, get) => ({
     try {
       const presetConfig = CapturePresets[preset ?? "1440p60"];
 
-      // Capture using Electron's desktopCapturer-compatible getUserMedia
+      // Capture video + system audio using Electron's desktopCapturer
       activeStream = await navigator.mediaDevices.getUserMedia({
-        audio: false,
+        audio: {
+          mandatory: { chromeMediaSource: "desktop" },
+        } as any,
         video: {
           mandatory: {
             chromeMediaSource: "desktop",
@@ -459,12 +461,17 @@ export const useVoiceStore = create<VoiceStoreState>()((set, get) => ({
       const track = activeStream.getVideoTracks()[0];
       track.contentHint = "motion";
 
-      // Encode with WebCodecs (hardware-accelerated) and transport via DataChannel.
-      // Actual capture dimensions are auto-detected from the first VideoFrame.
+      // Encode video with WebCodecs (hardware-accelerated) via DataChannel
       await livekitManager.publishScreenEncoded(track, {
         framerate: presetConfig.maxFrameRate,
         bitrate: presetConfig.bitrate,
       });
+
+      // Publish system audio via LiveKit (if captured — only works on Windows)
+      const audioTrack = activeStream.getAudioTracks()[0];
+      if (audioTrack) {
+        await livekitManager.publishScreenAudio(audioTrack);
+      }
 
       const myUserId = useAuthStore.getState().user?.id ?? "";
       set((s) => ({
@@ -492,8 +499,8 @@ export const useVoiceStore = create<VoiceStoreState>()((set, get) => ({
   },
 
   stopScreenShare: () => {
-    // Stop custom encoder
     livekitManager.stopScreenEncoded();
+    livekitManager.unpublishScreenAudio();
 
     // Stop capture stream
     if (activeStream) {

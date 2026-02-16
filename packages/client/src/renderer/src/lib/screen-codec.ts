@@ -4,12 +4,17 @@
  * Uses WebCodecs VideoEncoder with hardware acceleration (NVENC / Media
  * Foundation / VideoToolbox) instead of WebRTC's software-only codecs.
  * Encoded frames are transported via LiveKit DataChannel and decoded on
- * the receiver with VideoDecoder → canvas → MediaStreamTrack.
+ * the receiver with VideoDecoder → MediaStreamTrackGenerator.
  */
 
 declare class MediaStreamTrackProcessor<T> {
   constructor(init: { track: MediaStreamTrack });
   readonly readable: ReadableStream<T>;
+}
+
+declare class MediaStreamTrackGenerator extends MediaStreamTrack {
+  constructor(init: { kind: string });
+  readonly writable: WritableStream<VideoFrame>;
 }
 
 // ----- Chunking (DataChannel has 65535 byte limit) -----
@@ -269,38 +274,26 @@ export class ScreenEncoder {
 
 export class ScreenDecoder {
   private decoder: VideoDecoder | null = null;
-  private canvas: HTMLCanvasElement;
-  private ctx: CanvasRenderingContext2D;
-  private outputTrack: MediaStreamTrack;
+  private generator: MediaStreamTrackGenerator;
+  private writer: WritableStreamDefaultWriter<VideoFrame>;
   private configured = false;
   private receivedKeyframe = false;
   private assembler = new ChunkAssembler();
 
   constructor() {
-    this.canvas = document.createElement("canvas");
-    this.canvas.width = 1920;
-    this.canvas.height = 1080;
-    this.ctx = this.canvas.getContext("2d")!;
-
-    const stream = (this.canvas as any).captureStream(0) as MediaStream;
-    this.outputTrack = stream.getVideoTracks()[0];
+    this.generator = new MediaStreamTrackGenerator({ kind: "video" });
+    this.writer = this.generator.writable.getWriter();
 
     this.decoder = new VideoDecoder({
       output: (frame: VideoFrame) => {
-        if (this.canvas.width !== frame.displayWidth || this.canvas.height !== frame.displayHeight) {
-          this.canvas.width = frame.displayWidth;
-          this.canvas.height = frame.displayHeight;
-        }
-        this.ctx.drawImage(frame, 0, 0);
-        frame.close();
-        (this.outputTrack as any).requestFrame?.();
+        this.writer.write(frame).catch(() => frame.close());
       },
       error: (e) => console.error("[ScreenDecoder] Error:", e),
     });
   }
 
   getTrack(): MediaStreamTrack {
-    return this.outputTrack;
+    return this.generator;
   }
 
   feedChunk(msg: Uint8Array): void {
@@ -351,6 +344,7 @@ export class ScreenDecoder {
       this.decoder?.close();
     } catch {}
     this.decoder = null;
-    this.outputTrack.stop();
+    this.writer.close().catch(() => {});
+    this.generator.stop();
   }
 }

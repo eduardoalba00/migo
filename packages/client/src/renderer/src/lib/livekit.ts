@@ -2,6 +2,7 @@ import {
   Room,
   RoomEvent,
   Track,
+  type LocalTrackPublication,
   type RemoteParticipant,
   type RemoteTrackPublication,
   type RemoteTrack,
@@ -35,6 +36,7 @@ export class LiveKitManager {
   // Custom screen share encoding (WebCodecs + DataChannel)
   private screenEncoder: ScreenEncoder | null = null;
   private screenDecoders = new Map<string, ScreenDecoder>();
+  private screenAudioPublication: LocalTrackPublication | null = null;
 
   // VAD state
   private audioContext: AudioContext | null = null;
@@ -84,9 +86,10 @@ export class LiveKitManager {
     }
     this.attachedAudioElements.clear();
 
-    // Clean up screen share encoder/decoders
+    // Clean up screen share encoder/decoders/audio
     this.screenEncoder?.stop();
     this.screenEncoder = null;
+    this.screenAudioPublication = null;
     for (const decoder of this.screenDecoders.values()) {
       decoder.stop();
     }
@@ -123,6 +126,20 @@ export class LiveKitManager {
   stopScreenEncoded(): void {
     this.screenEncoder?.stop();
     this.screenEncoder = null;
+  }
+
+  async publishScreenAudio(track: MediaStreamTrack): Promise<void> {
+    if (!this.room) return;
+    this.screenAudioPublication = await this.room.localParticipant.publishTrack(track, {
+      source: Track.Source.ScreenShareAudio,
+    });
+  }
+
+  unpublishScreenAudio(): void {
+    if (this.screenAudioPublication) {
+      this.room?.localParticipant.unpublishTrack(this.screenAudioPublication.track!);
+      this.screenAudioPublication = null;
+    }
   }
 
   // Called when a remote participant stops screen sharing (via WS signal)
@@ -321,7 +338,6 @@ export class LiveKitManager {
       RoomEvent.TrackSubscribed,
       (track: RemoteTrack, publication: RemoteTrackPublication, participant: RemoteParticipant) => {
         if (track.kind === Track.Kind.Audio) {
-          // Attach for playback
           const el = track.attach();
           const vol = this.userVolumes.get(participant.identity) ?? 1;
           el.volume = vol;
@@ -332,8 +348,10 @@ export class LiveKitManager {
           existing.push(el);
           this.attachedAudioElements.set(participant.identity, existing);
 
-          // Create analyser for real-time speaking detection
-          this.createAnalyser(participant.identity, track.mediaStreamTrack);
+          // Only create VAD analyser for mic audio, not screen share audio
+          if (publication.source === Track.Source.Microphone) {
+            this.createAnalyser(participant.identity, track.mediaStreamTrack);
+          }
         }
       },
     );
@@ -343,11 +361,21 @@ export class LiveKitManager {
       (track: RemoteTrack, publication: RemoteTrackPublication, participant: RemoteParticipant) => {
         if (track.kind === Track.Kind.Audio) {
           const detached = track.detach();
-          for (const el of detached) {
-            el.remove();
+          const detachedSet = new Set(detached);
+          for (const el of detached) el.remove();
+
+          // Remove only the detached elements, keep others (e.g. mic vs screen audio)
+          const remaining = (this.attachedAudioElements.get(participant.identity) ?? [])
+            .filter((el) => !detachedSet.has(el));
+          if (remaining.length > 0) {
+            this.attachedAudioElements.set(participant.identity, remaining);
+          } else {
+            this.attachedAudioElements.delete(participant.identity);
           }
-          this.attachedAudioElements.delete(participant.identity);
-          this.removeAnalyser(participant.identity);
+
+          if (publication.source === Track.Source.Microphone) {
+            this.removeAnalyser(participant.identity);
+          }
         }
       },
     );
