@@ -8,6 +8,7 @@ import { createAuthMiddleware } from "../middleware/auth.js";
 import { attachments } from "../db/schema/attachments.js";
 import { fastifyRoute } from "../lib/route-utils.js";
 import fs from "node:fs";
+import fsPromises from "node:fs/promises";
 import path from "node:path";
 
 const ALLOWED_MIME_TYPES = new Set([
@@ -82,7 +83,7 @@ export function uploadRoutes(
       const filePath = path.join(config.uploadDir, subfolder, uniqueName);
       const url = `/uploads/${subfolder}/${uniqueName}`;
 
-      fs.writeFileSync(filePath, buffer);
+      await fsPromises.writeFile(filePath, buffer);
 
       // If it's an attachment, create a pending attachment record
       if (subfolder === "attachments") {

@@ -3,6 +3,7 @@ import { DispatchEvent } from "@migo/shared";
 import type { WsDispatch, Message, Channel, DmChannel, ServerMember, MessageDeleteData, MemberLeaveData, VoiceState, TypingStartData, ReactionData, PresenceUpdateData } from "@migo/shared";
 import { wsManager } from "@/lib/ws";
 import { playMessageSound, playMentionSound } from "@/lib/sounds";
+import { useAuthStore } from "./auth";
 import { useChannelStore } from "./channels";
 import { useMessageStore } from "./messages";
 import { useServerStore } from "./servers";
@@ -35,7 +36,7 @@ export const useWsStore = create<WsState>()((set) => ({
         case DispatchEvent.MESSAGE_CREATE: {
           const msg = event.d as Message;
           useMessageStore.getState().handleMessageCreate(msg);
-          const myId = (window as any).__migoUserId;
+          const myId = useAuthStore.getState().user?.id;
           const isOwnMsg = msg.author.id === myId;
           // Mark channel as unread if it's not the active channel
           useChannelStore.getState().markUnread(msg.channelId);
@@ -106,7 +107,7 @@ export const useWsStore = create<WsState>()((set) => ({
         case DispatchEvent.DM_MESSAGE_CREATE: {
           const dmMsg = event.d as Message;
           useDmStore.getState().handleDmMessageCreate(dmMsg);
-          if (dmMsg.author.id !== (window as any).__migoUserId) {
+          if (dmMsg.author.id !== useAuthStore.getState().user?.id) {
             playMessageSound();
             if (!document.hasFocus()) {
               try {

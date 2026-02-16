@@ -110,6 +110,12 @@ if ($start -match "^[Nn]") {
 Write-Host
 Write-Host "Starting Migo..."
 docker compose -f $ComposeFile --env-file $EnvFile up -d
+if ($LASTEXITCODE -ne 0) {
+    Write-Host
+    Write-Host "Failed to start Migo. Check the logs with:" -ForegroundColor Red
+    Write-Host "  docker compose -f $ComposeFile --env-file $EnvFile logs"
+    exit 1
+}
 
 Write-Host
 Write-Host "Migo is running! Connect with:" -ForegroundColor Green

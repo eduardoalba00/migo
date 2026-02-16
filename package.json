@@ -1,6 +1,7 @@
 {
   "name": "migo",
   "private": true,
+  "license": "MIT",
   "packageManager": "pnpm@9.11.0",
   "scripts": {
     "dev:server": "docker compose up -d --wait postgres livekit && pnpm --filter @migo/server dev",

@@ -16,7 +16,6 @@ export class ApiClient {
 
   async fetch<T>(path: string, options: RequestInit = {}): Promise<T> {
     const headers: Record<string, string> = {
-      "ngrok-skip-browser-warning": "true",
       ...((options.headers as Record<string, string>) || {}),
     };
 
@@ -74,9 +73,7 @@ export class ApiClient {
   }
 
   async upload<T>(path: string, formData: FormData): Promise<T> {
-    const headers: Record<string, string> = {
-      "ngrok-skip-browser-warning": "true",
-    };
+    const headers: Record<string, string> = {};
 
     if (this.accessToken) {
       headers["Authorization"] = `Bearer ${this.accessToken}`;

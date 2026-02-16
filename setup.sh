@@ -94,7 +94,12 @@ fi
 
 echo
 echo "Starting Migo..."
-docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d
+if ! docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d; then
+  echo
+  echo "Failed to start Migo. Check the logs with:"
+  echo "  docker compose -f $COMPOSE_FILE --env-file $ENV_FILE logs"
+  exit 1
+fi
 
 echo
 echo "Migo is running! Connect with:"

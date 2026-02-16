@@ -63,6 +63,12 @@ services:
       - uploads:/data/uploads
     labels:
       - "com.centurylinklabs.watchtower.scope=migo"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:8080/api/health').then(r=>{if(!r.ok)throw 1})"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
 
   watchtower:
     image: containrrr/watchtower
@@ -74,8 +80,6 @@ services:
       WATCHTOWER_SCOPE: migo
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-    labels:
-      - "com.centurylinklabs.watchtower.scope=migo"
 
 volumes:
   pgdata:

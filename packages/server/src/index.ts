@@ -18,6 +18,16 @@ async function main() {
 
   await app.listen({ port: config.port, host: config.host });
   console.log(`Migo server running on http://${config.host}:${config.port}`);
+
+  for (const signal of ["SIGINT", "SIGTERM"] as const) {
+    process.on(signal, () => {
+      console.log(`Received ${signal}, shutting down...`);
+      app.close().then(() => {
+        console.log("Server closed");
+        process.exit(0);
+      });
+    });
+  }
 }
 
 main().catch((err) => {

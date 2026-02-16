@@ -2,6 +2,7 @@ import { create } from "zustand";
 import type { Message, ReactionData } from "@migo/shared";
 import { MESSAGE_ROUTES, buildRoute } from "@migo/shared";
 import { api } from "@/lib/api";
+import { useAuthStore } from "./auth";
 
 interface ReplyContext {
   messageId: string;
@@ -160,13 +161,13 @@ export const useMessageStore = create<MessageState>()((set, get) => ({
               reactions[idx] = {
                 ...reactions[idx],
                 count: reactions[idx].count + 1,
-                me: reactions[idx].me || data.userId === (window as any).__migoUserId,
+                me: reactions[idx].me || data.userId === useAuthStore.getState().user?.id,
               };
             } else {
               reactions.push({
                 emoji: data.emoji,
                 count: 1,
-                me: data.userId === (window as any).__migoUserId,
+                me: data.userId === useAuthStore.getState().user?.id,
               });
             }
             return { ...m, reactions };
@@ -190,7 +191,7 @@ export const useMessageStore = create<MessageState>()((set, get) => ({
                 return {
                   ...r,
                   count: r.count - 1,
-                  me: data.userId === (window as any).__migoUserId ? false : r.me,
+                  me: data.userId === useAuthStore.getState().user?.id ? false : r.me,
                 };
               })
               .filter((r) => r.count > 0);

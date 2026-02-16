@@ -1,0 +1,9 @@
+node_modules
+.git
+.github
+dist
+out
+*.md
+.env*
+packages/client
+packages/screen-capture
