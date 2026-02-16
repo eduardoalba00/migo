@@ -1,4 +1,5 @@
 FROM node:22-slim AS base
+RUN apt-get update && apt-get install -y python3 build-essential && rm -rf /var/lib/apt/lists/*
 RUN corepack enable && corepack prepare pnpm@9.11.0 --activate
 WORKDIR /app
 
@@ -19,6 +20,7 @@ RUN pnpm build:server
 
 # Runtime
 FROM node:22-slim
+RUN apt-get update && apt-get install -y python3 build-essential && rm -rf /var/lib/apt/lists/*
 RUN corepack enable && corepack prepare pnpm@9.11.0 --activate
 WORKDIR /app
 
@@ -34,4 +36,6 @@ COPY --from=base /app/packages/server/drizzle packages/server/drizzle
 
 ENV NODE_ENV=production
 EXPOSE 8080
+EXPOSE 40000-40100/udp
+EXPOSE 40000-40100/tcp
 CMD ["node", "packages/server/dist/index.js"]

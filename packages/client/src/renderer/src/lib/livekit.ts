@@ -2,15 +2,12 @@ import {
   Room,
   RoomEvent,
   Track,
-  VideoPreset,
   type RemoteParticipant,
   type RemoteTrackPublication,
   type RemoteTrack,
-  type LocalTrackPublication,
 } from "livekit-client";
 
 export type SpeakingChangeCallback = (speakingUserIds: Set<string>) => void;
-export type ScreenShareCallback = (userId: string, track: MediaStreamTrack | null) => void;
 
 // Discord-style VAD thresholds
 const SPEAKING_THRESHOLD = 15; // frequency bin average (0-255 range)
@@ -25,7 +22,6 @@ interface AudioAnalysis {
 export class LiveKitManager {
   private room: Room | null = null;
   private speakingCallback: SpeakingChangeCallback | null = null;
-  private screenShareCallback: ScreenShareCallback | null = null;
   private selectedOutputDeviceId: string | null = null;
   private userVolumes = new Map<string, number>();
 
@@ -41,10 +37,6 @@ export class LiveKitManager {
 
   setSpeakingCallback(cb: SpeakingChangeCallback | null) {
     this.speakingCallback = cb;
-  }
-
-  setScreenShareCallback(cb: ScreenShareCallback | null) {
-    this.screenShareCallback = cb;
   }
 
   async connect(token: string, url: string): Promise<void> {
@@ -95,45 +87,6 @@ export class LiveKitManager {
     }
   }
 
-  async setScreenShareEnabled(enabled: boolean, sourceId?: string): Promise<void> {
-    if (!this.room) return;
-
-    if (enabled && sourceId) {
-      // Electron's desktopCapturer requires the legacy mandatory constraint format
-      // via getUserMedia — getDisplayMedia rejects it. Capture the stream ourselves
-      // and publish the track directly to LiveKit.
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: false,
-        video: {
-          mandatory: {
-            chromeMediaSource: "desktop",
-            chromeMediaSourceId: sourceId,
-            maxWidth: 2560,
-            maxHeight: 1440,
-            minFrameRate: 60,
-            maxFrameRate: 60,
-          },
-        } as any,
-      });
-      const track = stream.getVideoTracks()[0];
-      track.contentHint = "motion";
-      await this.room.localParticipant.publishTrack(track, {
-        source: Track.Source.ScreenShare,
-        name: "screen",
-        videoEncoding: { maxBitrate: 12_000_000, maxFramerate: 60 },
-        simulcast: false,
-      });
-      // Notify callback so the local user sees their own screen share
-      this.screenShareCallback?.(this.room.localParticipant.identity, track);
-    } else if (enabled) {
-      await this.room.localParticipant.setScreenShareEnabled(true);
-    } else {
-      // Notify callback to remove local screen share before disabling
-      this.screenShareCallback?.(this.room.localParticipant.identity, null);
-      await this.room.localParticipant.setScreenShareEnabled(false);
-    }
-  }
-
   setDeafened(deafened: boolean): void {
     if (!this.room) return;
     for (const participant of this.room.remoteParticipants.values()) {
@@ -181,11 +134,6 @@ export class LiveKitManager {
 
   getUserVolume(userId: string): number {
     return this.userVolumes.get(userId) ?? 1;
-  }
-
-  get isScreenSharing(): boolean {
-    if (!this.room) return false;
-    return this.room.localParticipant.isScreenShareEnabled;
   }
 
   static async getAudioDevices(): Promise<{ inputs: MediaDeviceInfo[]; outputs: MediaDeviceInfo[] }> {
@@ -311,11 +259,6 @@ export class LiveKitManager {
     this.room.on(
       RoomEvent.TrackSubscribed,
       (track: RemoteTrack, publication: RemoteTrackPublication, participant: RemoteParticipant) => {
-        if (track.source === Track.Source.ScreenShare) {
-          this.screenShareCallback?.(participant.identity, track.mediaStreamTrack);
-          return;
-        }
-
         if (track.kind === Track.Kind.Audio) {
           // Attach for playback
           const el = track.attach();
@@ -337,11 +280,6 @@ export class LiveKitManager {
     this.room.on(
       RoomEvent.TrackUnsubscribed,
       (track: RemoteTrack, publication: RemoteTrackPublication, participant: RemoteParticipant) => {
-        if (track.source === Track.Source.ScreenShare) {
-          this.screenShareCallback?.(participant.identity, null);
-          return;
-        }
-
         if (track.kind === Track.Kind.Audio) {
           const detached = track.detach();
           for (const el of detached) {
@@ -349,15 +287,6 @@ export class LiveKitManager {
           }
           this.attachedAudioElements.delete(participant.identity);
           this.removeAnalyser(participant.identity);
-        }
-      },
-    );
-
-    this.room.on(
-      RoomEvent.LocalTrackUnpublished,
-      (publication: LocalTrackPublication) => {
-        if (publication.source === Track.Source.ScreenShare) {
-          // The store will handle state update via the screenShare toggle
         }
       },
     );

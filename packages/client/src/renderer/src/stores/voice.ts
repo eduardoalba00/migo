@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { WsOpcode } from "@migo/shared";
 import type { VoiceState, VoiceChannelUser } from "@migo/shared";
 import { livekitManager } from "@/lib/livekit";
+import { ScreenShareManager } from "@/lib/screen-share";
 import { wsManager } from "@/lib/ws";
 import { playJoinSound, playLeaveSound, playMuteSound, playUnmuteSound } from "@/lib/sounds";
 import { useAuthStore } from "./auth";
@@ -34,7 +35,7 @@ interface VoiceStoreState {
   toggleScreenShare: () => void;
   startScreenShare: (sourceId: string) => Promise<void>;
   stopScreenShare: () => void;
-  handleScreenShareStart: (data: { userId: string; channelId: string }) => void;
+  handleScreenShareStart: (data: { userId: string; channelId: string; producerId?: string }) => void;
   handleScreenShareStop: (data: { userId: string }) => void;
   focusScreenShare: (userId: string) => void;
   unfocusScreenShare: () => void;
@@ -75,6 +76,10 @@ function voiceSignal(action: string, data?: any): Promise<any> {
   });
 }
 
+// Module-level screen share manager instance
+let screenShareManager: ScreenShareManager | null = null;
+let currentProducerId: string | null = null;
+
 export const useVoiceStore = create<VoiceStoreState>()((set, get) => ({
   currentChannelId: null,
   currentServerId: null,
@@ -100,27 +105,9 @@ export const useVoiceStore = create<VoiceStoreState>()((set, get) => ({
 
     set({ isConnecting: true, currentChannelId: channelId, currentServerId: serverId });
 
-    // Set up LiveKit callbacks
+    // Set up LiveKit callbacks (voice/audio only)
     livekitManager.setSpeakingCallback((speakers) => {
       set({ speakingUsers: speakers });
-    });
-
-    livekitManager.setScreenShareCallback((userId, track) => {
-      if (track) {
-        set((s) => ({
-          screenShareTracks: { ...s.screenShareTracks, [userId]: track },
-        }));
-      } else {
-        set((s) => {
-          const screenShareTracks = { ...s.screenShareTracks };
-          delete screenShareTracks[userId];
-          return {
-            screenShareTracks,
-            focusedScreenShareUserId:
-              s.focusedScreenShareUserId === userId ? null : s.focusedScreenShareUserId,
-          };
-        });
-      }
     });
 
     try {
@@ -145,13 +132,17 @@ export const useVoiceStore = create<VoiceStoreState>()((set, get) => ({
       if (savedInput) livekitManager.setInputDevice(savedInput);
       if (savedOutput) livekitManager.setOutputDevice(savedOutput);
 
+      // 6. Initialize mediasoup device for screen sharing
+      screenShareManager = new ScreenShareManager(voiceSignal);
+      await screenShareManager.initDevice();
+
       set({ isConnecting: false });
       playJoinSound();
     } catch (err) {
       console.error("Failed to join voice channel:", err);
       set({ isConnecting: false, currentChannelId: null, currentServerId: null });
       livekitManager.setSpeakingCallback(null);
-      livekitManager.setScreenShareCallback(null);
+      screenShareManager = null;
     }
   },
 
@@ -159,7 +150,13 @@ export const useVoiceStore = create<VoiceStoreState>()((set, get) => ({
     const { currentChannelId } = get();
     livekitManager.disconnect();
     livekitManager.setSpeakingCallback(null);
-    livekitManager.setScreenShareCallback(null);
+
+    // Dispose mediasoup screen share
+    if (screenShareManager) {
+      screenShareManager.dispose();
+      screenShareManager = null;
+    }
+    currentProducerId = null;
 
     // Tell server we left
     wsManager.send({
@@ -361,12 +358,20 @@ export const useVoiceStore = create<VoiceStoreState>()((set, get) => ({
 
   startScreenShare: async (sourceId: string) => {
     set({ showScreenSharePicker: false });
+    if (!screenShareManager) return;
+
     try {
-      await livekitManager.setScreenShareEnabled(true, sourceId);
-      set({ isScreenSharing: true });
+      const { producerId, track } = await screenShareManager.startSharing(sourceId);
+      currentProducerId = producerId;
+      set((s) => ({
+        isScreenSharing: true,
+        screenShareTracks: { ...s.screenShareTracks, [useAuthStore.getState().user?.id ?? ""]: track },
+      }));
+
+      // Notify server about screen share with producerId
       wsManager.send({
         op: WsOpcode.VOICE_SIGNAL,
-        d: { requestId: `ss_${Date.now()}`, action: "startScreenShare" },
+        d: { requestId: `ss_${Date.now()}`, action: "startScreenShare", data: { producerId } },
       });
     } catch (err) {
       console.error("Failed to start screen share:", err);
@@ -375,16 +380,28 @@ export const useVoiceStore = create<VoiceStoreState>()((set, get) => ({
   },
 
   stopScreenShare: () => {
-    livekitManager.setScreenShareEnabled(false);
-    set({ isScreenSharing: false });
+    if (screenShareManager) {
+      screenShareManager.stopSharing();
+    }
+
+    const userId = useAuthStore.getState().user?.id ?? "";
+    set((s) => {
+      const screenShareTracks = { ...s.screenShareTracks };
+      delete screenShareTracks[userId];
+      return { isScreenSharing: false, screenShareTracks };
+    });
+
     wsManager.send({
       op: WsOpcode.VOICE_SIGNAL,
-      d: { requestId: `ss_${Date.now()}`, action: "stopScreenShare" },
+      d: { requestId: `ss_${Date.now()}`, action: "stopScreenShare", data: { producerId: currentProducerId } },
     });
+    currentProducerId = null;
   },
 
-  handleScreenShareStart: (data: { userId: string; channelId: string }) => {
+  handleScreenShareStart: (data: { userId: string; channelId: string; producerId?: string }) => {
     const { channelUsers } = get();
+    const myUserId = useAuthStore.getState().user?.id;
+
     // Update the user's screenSharing status
     if (data.channelId && channelUsers[data.channelId]?.[data.userId]) {
       set((s) => ({
@@ -400,9 +417,27 @@ export const useVoiceStore = create<VoiceStoreState>()((set, get) => ({
         },
       }));
     }
+
+    // If this is another user's screen share, consume it via mediasoup
+    if (data.userId !== myUserId && data.producerId && screenShareManager) {
+      screenShareManager.viewStream(data.producerId).then((track) => {
+        set((s) => ({
+          screenShareTracks: { ...s.screenShareTracks, [data.userId]: track },
+        }));
+      }).catch((err) => {
+        console.error("Failed to view screen share:", err);
+      });
+    }
   },
 
   handleScreenShareStop: (data: { userId: string }) => {
+    const myUserId = useAuthStore.getState().user?.id;
+
+    // Stop viewing if it's another user's screen share
+    if (data.userId !== myUserId && screenShareManager) {
+      screenShareManager.stopViewing();
+    }
+
     set((s) => {
       // Remove track from map
       const screenShareTracks = { ...s.screenShareTracks };

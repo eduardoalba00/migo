@@ -64,6 +64,7 @@ function ScreenShareTile({ track, sharerName, onClick, showClickHint }: ScreenSh
       <video
         ref={videoRef}
         autoPlay
+        muted
         playsInline
         className="w-full h-full object-contain"
       />
@@ -120,6 +121,7 @@ function FocusedView({
       <video
         ref={videoRef}
         autoPlay
+        muted
         playsInline
         className="w-full h-full object-contain"
       />

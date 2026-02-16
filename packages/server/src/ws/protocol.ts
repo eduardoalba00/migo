@@ -9,6 +9,7 @@ import { users } from "../db/schema/users.js";
 import type { ConnectionManager } from "./connection.js";
 import type { LiveKitService } from "../voice/livekit.js";
 import type { VoiceStateManager } from "../voice/state.js";
+import type { MediasoupManager } from "../screenshare/mediasoup-manager.js";
 import { handleVoiceStateUpdate, handleVoiceSignal, handleLeave } from "../voice/protocol.js";
 
 const HEARTBEAT_INTERVAL = 30_000;
@@ -32,6 +33,7 @@ export function handleConnection(
   connectionManager: ConnectionManager,
   livekitService: LiveKitService,
   voiceStateManager: VoiceStateManager,
+  mediasoupManager: MediasoupManager,
 ) {
   let userId: string | null = null;
   let identified = false;
@@ -158,12 +160,12 @@ export function handleConnection(
     }
 
     if (msg.op === WsOpcode.VOICE_STATE_UPDATE && identified && userId) {
-      handleVoiceStateUpdate(socket, userId, msg, livekitService, voiceStateManager, connectionManager, db);
+      handleVoiceStateUpdate(socket, userId, msg, livekitService, voiceStateManager, connectionManager, db, mediasoupManager);
       return;
     }
 
     if (msg.op === WsOpcode.VOICE_SIGNAL && identified && userId) {
-      handleVoiceSignal(socket, userId, msg, livekitService, voiceStateManager, connectionManager, db);
+      handleVoiceSignal(socket, userId, msg, livekitService, voiceStateManager, connectionManager, db, mediasoupManager);
       return;
     }
 
@@ -241,7 +243,7 @@ export function handleConnection(
       }
 
       // Auto-leave voice channel on disconnect
-      handleLeave(userId, voiceStateManager, connectionManager, db);
+      handleLeave(userId, voiceStateManager, connectionManager, db, mediasoupManager);
       connectionManager.remove(userId);
     }
   });

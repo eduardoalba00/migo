@@ -14,6 +14,9 @@ export interface Config {
   livekitApiSecret: string;
   uploadDir: string;
   maxFileSizeMb: number;
+  mediasoupAnnouncedIp: string;
+  mediasoupMinPort: number;
+  mediasoupMaxPort: number;
 }
 
 export function loadConfig(): Config {
@@ -31,5 +34,8 @@ export function loadConfig(): Config {
     livekitApiSecret: process.env.LIVEKIT_API_SECRET || "secret",
     uploadDir: process.env.UPLOAD_DIR || "./uploads",
     maxFileSizeMb: parseInt(process.env.MAX_FILE_SIZE_MB || "25", 10),
+    mediasoupAnnouncedIp: process.env.MEDIASOUP_ANNOUNCED_IP || "127.0.0.1",
+    mediasoupMinPort: parseInt(process.env.MEDIASOUP_MIN_PORT || "40000", 10),
+    mediasoupMaxPort: parseInt(process.env.MEDIASOUP_MAX_PORT || "40100", 10),
   };
 }
