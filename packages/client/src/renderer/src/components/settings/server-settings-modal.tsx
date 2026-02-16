@@ -1,9 +1,10 @@
 import { useState, useEffect } from "react";
 import { X, Settings, Users, Link, Trash2, Shield, Ban } from "lucide-react";
 import { useServerStore } from "@/stores/servers";
+import { useAuthStore } from "@/stores/auth";
 import { useMemberStore } from "@/stores/members";
 import { api, resolveUploadUrl } from "@/lib/api";
-import { SERVER_ROUTES, buildRoute } from "@migo/shared";
+import { SERVER_ROUTES, UPLOAD_ROUTES, buildRoute } from "@migo/shared";
 import type { Server, ServerMember, Invite, User } from "@migo/shared";
 import { RolesSettings } from "./roles-settings";
 
@@ -79,6 +80,34 @@ function OverviewTab({ server, onClose }: { server: Server; onClose: () => void 
     }
   };
 
+  const handleIconUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append("icon", file);
+
+    const response = await fetch(
+      `${api.getBaseUrl()}${UPLOAD_ROUTES.UPLOAD}`,
+      {
+        method: "POST",
+        headers: { Authorization: `Bearer ${useAuthStore.getState().tokens?.accessToken}` },
+        body: formData,
+      },
+    );
+
+    if (response.ok) {
+      const data = await response.json();
+      await api.patch(buildRoute(SERVER_ROUTES.UPDATE, { serverId: server.id }), { iconUrl: data.url });
+      await fetchServers();
+    }
+  };
+
+  const handleRemoveIcon = async () => {
+    await api.patch(buildRoute(SERVER_ROUTES.UPDATE, { serverId: server.id }), { iconUrl: null });
+    await fetchServers();
+  };
+
   const handleDelete = async () => {
     if (!confirm("Are you sure you want to delete this server? This cannot be undone.")) return;
     await deleteServer(server.id);
@@ -88,6 +117,32 @@ function OverviewTab({ server, onClose }: { server: Server; onClose: () => void 
   return (
     <div className="space-y-6">
       <h2 className="text-xl font-bold">Server Overview</h2>
+      <div className="flex items-center gap-4">
+        <div className="relative">
+          <div className="w-20 h-20 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-2xl font-bold">
+            {server.iconUrl ? (
+              <img src={resolveUploadUrl(server.iconUrl)!} className="w-20 h-20 rounded-full object-cover" alt="" />
+            ) : (
+              server.name.charAt(0).toUpperCase()
+            )}
+          </div>
+          <label className="absolute inset-0 rounded-full cursor-pointer flex items-center justify-center bg-black/50 opacity-0 hover:opacity-100 transition-opacity text-white text-xs font-medium">
+            Change
+            <input type="file" accept="image/*" className="hidden" onChange={handleIconUpload} />
+          </label>
+        </div>
+        <div>
+          <p className="font-semibold">{server.name}</p>
+          {server.iconUrl && (
+            <button
+              onClick={handleRemoveIcon}
+              className="text-xs text-destructive hover:underline mt-1"
+            >
+              Remove icon
+            </button>
+          )}
+        </div>
+      </div>
       <div className="space-y-3 max-w-sm">
         <div>
           <label className="text-sm font-medium">Server Name</label>

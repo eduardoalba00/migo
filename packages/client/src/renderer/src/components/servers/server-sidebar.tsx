@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/tooltip";
 import { CreateServerDialog } from "@/components/servers/create-server-dialog";
 import { JoinServerDialog } from "@/components/servers/join-server-dialog";
+import { resolveUploadUrl } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 export function ServerSidebar() {
@@ -98,7 +99,15 @@ export function ServerSidebar() {
                         "rounded-[8px] bg-sidebar-primary text-sidebar-primary-foreground",
                     )}
                   >
-                    {server.name.charAt(0).toUpperCase()}
+                    {server.iconUrl ? (
+                      <img
+                        src={resolveUploadUrl(server.iconUrl)!}
+                        alt=""
+                        className="h-[42px] w-[42px] rounded-[inherit] object-cover"
+                      />
+                    ) : (
+                      server.name.charAt(0).toUpperCase()
+                    )}
                   </button>
                 </div>
               </TooltipTrigger>

@@ -13,7 +13,7 @@ export const updateServerSchema = z.object({
     .min(1, "Server name is required")
     .max(100, "Server name must be at most 100 characters")
     .optional(),
-  iconUrl: z.string().url("Invalid icon URL").nullable().optional(),
+  iconUrl: z.string().nullable().optional(),
 });
 
 export const createCategorySchema = z.object({
