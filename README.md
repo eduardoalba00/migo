@@ -20,7 +20,11 @@ A single command runs everything: Migo server, PostgreSQL, LiveKit (voice), and 
 ### Prerequisites
 
 - [Docker](https://docs.docker.com/engine/install/) and [Docker Compose](https://docs.docker.com/compose/install/) installed
-- Ports open on your firewall: **8080**, **7880-7881**, **40000-40100**, **50000-50100/udp**
+- Ports open on your firewall:
+  - **8080** — API / WebSocket
+  - **7880-7881** — LiveKit (voice)
+  - **40000-40100** — mediasoup (screen share)
+  - **50000-50100/udp** — LiveKit WebRTC
 
 ### Setup
 
