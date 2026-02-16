@@ -9,7 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 pnpm install
 
 # Dev servers (run in separate terminals)
-pnpm dev:server          # Fastify backend with tsx watch (port 8080)
+pnpm dev:server          # Starts Postgres + LiveKit via docker compose, then Fastify with tsx watch (port 8080)
 pnpm dev:client          # Electron + Vite React app
 pnpm dev:client2         # Second client instance (MIGO_INSTANCE=2)
 
@@ -65,12 +65,13 @@ Multi-stage build: installs deps → builds shared + server → copies only prod
 
 The centralized server at `migoserver.com` runs on Railway:
 
-- **Node service** — Railpack auto-detects the pnpm monorepo and builds `@migo/server` via `pnpm --filter @migo/server` commands. Custom domain `migoserver.com` pointed to the Railway service.
+- **Node service** — Docker image (`ghcr.io/eduardoalba00/migo-server`) deployed via GHCR. Custom domain `migoserver.com` pointed to the Railway service.
 - **PostgreSQL** — Railway-managed Postgres service. `DATABASE_URL` is provided automatically via reference variable.
 - **Persistent storage** — Volume mounted at `/data/uploads` for file uploads (`UPLOAD_DIR=/data/uploads`).
 - **Voice** — LiveKit Cloud (no self-hosted LiveKit needed).
+- **Screen sharing** — mediasoup SFU on TCP port 40000, exposed via Railway TCP proxy.
 
-Environment variables: `DATABASE_URL` (Railway Postgres ref), `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, `UPLOAD_DIR=/data/uploads`.
+Environment variables: `DATABASE_URL` (Railway Postgres ref), `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, `UPLOAD_DIR=/data/uploads`, `MEDIASOUP_PORT` (optional, default 40000 — Railway TCP proxy must forward this port).
 
 CI/CD: Railway auto-deploys from the `main` branch — no SSH or manual deploy step.
 
@@ -78,11 +79,12 @@ The client ships with a default workspace pointing to `https://migoserver.com`. 
 
 ## Architecture
 
-**pnpm monorepo** with three packages:
+**pnpm monorepo** with four packages:
 
-- **`@migo/server`** — Fastify 5 REST API + WebSocket server. PostgreSQL via Drizzle ORM + postgres.js. Voice via LiveKit (token service). Auth via argon2 + JWT (jose).
+- **`@migo/server`** — Fastify 5 REST API + WebSocket server. PostgreSQL via Drizzle ORM + postgres.js. Voice via LiveKit (token service). Screen sharing via mediasoup SFU. Auth via argon2 + JWT (jose).
 - **`@migo/client`** — Electron 40 desktop app. React 19 renderer built with electron-vite. State management with Zustand. Styling with Tailwind CSS 4 (OKLCH color tokens). UI primitives from Radix UI.
-- **`@migo/shared`** — Zod schemas, TypeScript types, and API route constants shared between client and server.
+- **`@migo/shared`** — Zod schemas, TypeScript types, WebSocket protocol definitions, and API route constants shared between client and server.
+- **`@migo/screen-capture`** — Rust native addon (NAPI-RS) for cross-platform screen/window capture using the `scap` crate.
 
 ### Shared package resolution
 
@@ -98,15 +100,16 @@ The shared package uses a custom export condition `@migo/source` so dev tools (t
 | `middleware/` | Bearer token auth extraction |
 | `ws/` | WebSocket protocol: connection registry, opcode handler, EventEmitter-based pubsub |
 | `voice/` | LiveKit token service, voice state tracking |
+| `screenshare/` | mediasoup SFU manager for screen sharing (WebRtcServer on single TCP port) |
 
-Config is env-based (`config.ts`): `PORT`, `HOST`, `DATABASE_URL`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`. Defaults work for local dev (auto-generated JWT secrets, `postgres://localhost:5432/migo`). LiveKit dev server: `docker run --rm -p 7880:7880 -p 7881:7881 -p 7882:7882/udp livekit/livekit-server --dev --bind 0.0.0.0`.
+Config is env-based (`config.ts`): `PORT`, `HOST`, `DATABASE_URL`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, `MEDIASOUP_PORT` (default 40000). Defaults work for local dev (auto-generated JWT secrets, `postgres://localhost:5432/migo`). LiveKit dev server: `docker run --rm -p 7880:7880 -p 7881:7881 -p 7882:7882/udp livekit/livekit-server --dev --bind 0.0.0.0`.
 
 ### Client structure (`packages/client/src/renderer/src/`)
 
 | Directory | Purpose |
 |-----------|---------|
 | `stores/` | Zustand stores (auth, workspace, servers, channels, messages, voice, ws) |
-| `lib/` | HTTP client (`api.ts`), WebSocket manager (`ws.ts`), LiveKit client (`livekit.ts`) |
+| `lib/` | HTTP client (`api.ts`), WebSocket manager (`ws.ts`), LiveKit client (`livekit.ts`), screen share manager (`screen-share.ts`) |
 | `components/` | React components organized by domain (auth, servers, channels, messages, voice, layout, ui) |
 | `pages/` | Top-level views: auth, workspace picker, app shell |
 
@@ -114,7 +117,7 @@ Path alias: `@/*` maps to `src/renderer/src/*` in the client.
 
 ### WebSocket protocol
 
-Custom binary-style JSON protocol with opcodes: DISPATCH (0), IDENTIFY (1), HEARTBEAT (2), HEARTBEAT_ACK (3), READY (4), VOICE_STATE_UPDATE (5), VOICE_SIGNAL (6). Dispatch events include MESSAGE_CREATE/UPDATE/DELETE, CHANNEL_CREATE/UPDATE/DELETE, MEMBER_JOIN/LEAVE, VOICE_STATE_UPDATE. Types defined in `@migo/shared`.
+Custom binary-style JSON protocol with opcodes: DISPATCH (0), IDENTIFY (1), HEARTBEAT (2), HEARTBEAT_ACK (3), READY (4), VOICE_STATE_UPDATE (5), VOICE_SIGNAL (6), TYPING_START (7). Dispatch events include MESSAGE_CREATE/UPDATE/DELETE, CHANNEL_CREATE/UPDATE/DELETE, MEMBER_JOIN/LEAVE, VOICE_STATE_UPDATE, TYPING_START, REACTION_ADD/REMOVE, PRESENCE_UPDATE, SCREEN_SHARE_START/STOP. Types defined in `@migo/shared`.
 
 ### Auth flow
 

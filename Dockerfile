@@ -8,6 +8,7 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY packages/shared/package.json packages/shared/
 COPY packages/server/package.json packages/server/
 COPY packages/client/package.json packages/client/
+COPY packages/screen-capture/package.json packages/screen-capture/
 
 # Install dependencies (needs all workspace package.jsons for frozen lockfile)
 RUN pnpm install --frozen-lockfile
@@ -28,6 +29,7 @@ COPY --from=base /app/package.json /app/pnpm-lock.yaml /app/pnpm-workspace.yaml 
 COPY --from=base /app/packages/shared/package.json packages/shared/
 COPY --from=base /app/packages/server/package.json packages/server/
 COPY --from=base /app/packages/client/package.json packages/client/
+COPY --from=base /app/packages/screen-capture/package.json packages/screen-capture/
 RUN pnpm install --frozen-lockfile --prod
 
 COPY --from=base /app/packages/shared/dist packages/shared/dist
@@ -36,6 +38,5 @@ COPY --from=base /app/packages/server/drizzle packages/server/drizzle
 
 ENV NODE_ENV=production
 EXPOSE 8080
-EXPOSE 40000-40100/udp
-EXPOSE 40000-40100/tcp
+EXPOSE 40000
 CMD ["node", "packages/server/dist/index.js"]
