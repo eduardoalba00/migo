@@ -13,17 +13,17 @@ An open-source Discord-like chat platform you can self-host. Text channels, voic
 | `@migo/shared` | Zod schemas, TypeScript types, WebSocket protocol definitions, and API route constants shared between client and server. |
 | `@migo/screen-capture` | Rust native addon (NAPI-RS) for cross-platform screen/window capture using the `scap` crate. |
 
-## Host Your Own Server
+## Self-Host on Railway
 
-You need a [LiveKit Cloud](https://cloud.livekit.io) account (free tier) for voice chat. The steps below use [Railway](https://railway.app), but any Docker host works.
+Everything runs on [Railway](https://railway.app) with automatic updates — no maintenance required after setup.
 
-### 1. Get LiveKit credentials
+### Prerequisites
 
-1. Sign up at [cloud.livekit.io](https://cloud.livekit.io)
-2. Create a project
-3. Copy your **URL**, **API Key**, and **API Secret**
+- A [Railway](https://railway.app) account
+- A free [LiveKit Cloud](https://cloud.livekit.io) account (for voice chat)
+  - Sign up, create a project, and copy your **URL**, **API Key**, and **API Secret**
 
-### 2. Deploy on Railway
+### Setup
 
 1. Create a new Railway project
 2. Add a **PostgreSQL** service
@@ -32,8 +32,7 @@ You need a [LiveKit Cloud](https://cloud.livekit.io) account (free tier) for voi
    ghcr.io/eduardoalba00/migo-server:latest
    ```
 4. Add a **Volume** mounted at `/data/uploads`
-5. Under **Networking**, add a **TCP Proxy** on port `40000` (used by the mediasoup screen sharing SFU)
-6. Set the following environment variables on the Docker image service:
+5. Set the following environment variables on the Docker image service:
 
 | Variable | Value |
 |----------|-------|
@@ -45,11 +44,14 @@ You need a [LiveKit Cloud](https://cloud.livekit.io) account (free tier) for voi
 | `LIVEKIT_API_SECRET` | LiveKit API secret |
 | `UPLOAD_DIR` | `/data/uploads` |
 
-### 3. Connect
+6. Under **Networking**, add a **TCP Proxy** on port `40000` (screen sharing)
+7. Under **Settings** → **Auto Updates**, enable **Automatically update to the latest tag**
 
-Open Migo → **Add Workspace** → enter your Railway service URL (the public domain from **Networking**). Optionally add a custom domain.
+### Connect
 
-The `:latest` Docker tag always matches the central server, so your instance stays up to date on every redeploy.
+Open Migo → **Add Workspace** → enter your Railway public domain (from **Networking**). Optionally add a custom domain.
+
+Your server will automatically redeploy whenever a new version is published.
 
 ## License
 
