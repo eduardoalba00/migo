@@ -9,7 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 pnpm install
 
 # Dev servers (run in separate terminals)
-pnpm dev:server          # Starts Postgres + LiveKit via docker compose, then Fastify with tsx watch (port 8080)
+pnpm dev:server          # Starts Postgres + LiveKit via docker compose, then Fastify with tsx watch (port 3000)
 pnpm dev:client          # Electron + Vite React app
 pnpm dev:client2         # Second client instance (MIGO_INSTANCE=2)
 
@@ -44,21 +44,20 @@ To deploy: `pnpm ship` (merges `dev` → `main`, pushes, switches back to `dev`)
 
 Multi-stage build: installs deps → builds shared + server → copies only production deps, compiled JS, and Drizzle migration files into a slim runtime image. `NODE_ENV=production` is set so pino-pretty (devDependency) is skipped.
 
-## Centralized Deployment (Railway)
+## Self-Hosted Deployment
 
-The centralized server at `migoserver.com` runs on Railway:
+Production runs via `docker-compose.prod.yml` with all services in one compose stack:
 
-- **Node service** — Docker image (`ghcr.io/eduardoalba00/migo-server`) deployed via GHCR. Custom domain `migoserver.com` pointed to the Railway service.
-- **PostgreSQL** — Railway-managed Postgres service. `DATABASE_URL` is provided automatically via reference variable.
-- **Persistent storage** — Volume mounted at `/data/uploads` for file uploads (`UPLOAD_DIR=/data/uploads`).
-- **Voice** — LiveKit Cloud (no self-hosted LiveKit needed).
-- **Screen sharing** — mediasoup SFU on TCP port 40000, exposed via Railway TCP proxy.
+- **postgres** — `postgres:17-alpine` with a persistent volume. Server connects via internal DNS (`postgres:5432`).
+- **livekit** — Self-hosted `livekit/livekit-server`. Ports 7880 (API/WS), 7881 (TCP), 50000-50100/udp (WebRTC). Server connects internally (`ws://livekit:7880`); clients connect via `LIVEKIT_PUBLIC_URL`.
+- **server** — `ghcr.io/eduardoalba00/migo-server:latest`. Port 8080 (HTTP/WS), 40000-40100 (mediasoup UDP+TCP). Persistent volume at `/data/uploads`.
+- **watchtower** — Monitors the server container for new GHCR images, auto-restarts on update (polls every 5 minutes).
 
-Environment variables: `DATABASE_URL` (Railway Postgres ref), `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, `UPLOAD_DIR=/data/uploads`, `MEDIASOUP_PORT` (optional, default 40000 — Railway TCP proxy must forward this port).
+Environment variables are in `.env.prod` (see `.env.prod.example`): `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, `LIVEKIT_PUBLIC_URL` (public WS URL for clients), `MEDIASOUP_ANNOUNCED_IP` (server's public IP for NAT traversal).
 
-CI/CD: Railway auto-deploys from the `main` branch — no SSH or manual deploy step.
+CI/CD: GitHub Actions builds the GHCR image on push to `main`. Watchtower pulls the latest image automatically — no manual deploy step.
 
-The client ships with a default workspace pointing to `https://migoserver.com`. New users land directly on the login screen.
+Start: `docker compose -f docker-compose.prod.yml --env-file .env.prod up -d`
 
 ## Architecture
 
@@ -85,7 +84,7 @@ The shared package uses a custom export condition `@migo/source` so dev tools (t
 | `voice/` | LiveKit token service, voice state tracking |
 | `screenshare/` | mediasoup SFU manager for screen sharing (WebRtcServer on single TCP port) |
 
-Config is env-based (`config.ts`): `PORT`, `HOST`, `DATABASE_URL`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, `MEDIASOUP_PORT` (default 40000). Defaults work for local dev (auto-generated JWT secrets, `postgres://localhost:5432/migo`). LiveKit dev server: `docker run --rm -p 7880:7880 -p 7881:7881 -p 7882:7882/udp livekit/livekit-server --dev --bind 0.0.0.0`.
+Config is env-based (`config.ts`): `PORT` (default 3000), `HOST`, `DATABASE_URL`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, `MEDIASOUP_PORT` (default 40000). Defaults work for local dev (auto-generated JWT secrets, `postgres://localhost:5432/migo`). LiveKit dev server: `docker run --rm -p 7890:7880 -p 7881:7881 -p 7882:7882/udp livekit/livekit-server --dev --bind 0.0.0.0`.
 
 ### Client structure (`packages/client/src/renderer/src/`)
 

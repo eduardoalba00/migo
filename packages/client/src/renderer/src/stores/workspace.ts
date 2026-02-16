@@ -30,8 +30,8 @@ interface WorkspaceState {
 export const useWorkspaceStore = create<WorkspaceState>()(
   persist(
     (set, get) => ({
-      workspaces: [{ id: "default", name: "Migo", url: "https://migoserver.com" }],
-      activeWorkspaceId: "default",
+      workspaces: [],
+      activeWorkspaceId: null,
 
       addWorkspace: (name, url) => {
         const workspace: Workspace = {
@@ -44,7 +44,6 @@ export const useWorkspaceStore = create<WorkspaceState>()(
       },
 
       removeWorkspace: (id) => {
-        if (id === "default") return;
         // Clean up stored data for this workspace
         localStorage.removeItem(`migo-auth-${id}`);
         localStorage.removeItem(`migo-last-server-${id}`);

@@ -86,7 +86,7 @@ function AccountTab() {
     formData.append("avatar", file);
 
     const response = await fetch(
-      `${(api as any).baseUrl || "http://localhost:8080"}${UPLOAD_ROUTES.UPLOAD}`,
+      `${(api as any).baseUrl || "http://localhost:3000"}${UPLOAD_ROUTES.UPLOAD}`,
       {
         method: "POST",
         headers: { Authorization: `Bearer ${useAuthStore.getState().tokens?.accessToken}` },

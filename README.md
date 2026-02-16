@@ -13,46 +13,38 @@ An open-source Discord-like chat platform you can self-host. Text channels, voic
 | `@migo/shared` | Zod schemas, TypeScript types, WebSocket protocol definitions, and API route constants shared between client and server. |
 | `@migo/screen-capture` | Rust native addon (NAPI-RS) for cross-platform screen/window capture using the `scap` crate. |
 
-## Self-Host on Railway
+## Self-Host with Docker Compose
 
-Everything runs on [Railway](https://railway.app) with automatic updates — no maintenance required after setup.
+A single command runs everything: Migo server, PostgreSQL, LiveKit (voice), and Watchtower (auto-updates).
 
 ### Prerequisites
 
-- A [Railway](https://railway.app) account
-- A free [LiveKit Cloud](https://cloud.livekit.io) account (for voice chat)
-  - Sign up, create a project, and copy your **URL**, **API Key**, and **API Secret**
+- [Docker](https://docs.docker.com/engine/install/) and [Docker Compose](https://docs.docker.com/compose/install/) installed
+- Ports open on your firewall: **8080**, **7880-7881**, **40000-40100**, **50000-50100/udp**
 
 ### Setup
 
-1. Create a new Railway project
-2. Add a **PostgreSQL** service
-3. Click **New** → **Docker Image** and enter:
-   ```
-   ghcr.io/eduardoalba00/migo-server:latest
-   ```
-4. Add a **Volume** mounted at `/data/uploads`
-5. Set the following environment variables on the Docker image service:
+```bash
+git clone https://github.com/eduardoalba00/migo.git && cd migo
+```
 
-| Variable | Value |
-|----------|-------|
-| `PORT` | `8080` |
-| `DATABASE_URL` | Railway PostgreSQL reference variable (e.g. `${{Postgres.DATABASE_URL}}`) |
-| `JWT_ACCESS_SECRET` | Random string (`openssl rand -hex 32`) |
-| `JWT_REFRESH_SECRET` | Different random string |
-| `LIVEKIT_URL` | Your LiveKit Cloud WebSocket URL (`wss://your-project.livekit.cloud`) |
-| `LIVEKIT_API_KEY` | LiveKit API key |
-| `LIVEKIT_API_SECRET` | LiveKit API secret |
-| `UPLOAD_DIR` | `/data/uploads` |
+**Linux / macOS:**
+```bash
+chmod +x setup.sh && ./setup.sh
+```
 
-6. Under **Networking**, add a **TCP Proxy** on port `40000` (screen sharing)
-7. Under **Settings** → **Auto Updates**, enable **Automatically update to the latest tag**
+**Windows (PowerShell):**
+```powershell
+.\setup.ps1
+```
+
+The setup script auto-detects your public IP, generates all secrets, and starts the server.
 
 ### Connect
 
-Open Migo → **Add Workspace** → enter your Railway public domain (from **Networking**). Optionally add a custom domain.
+Open Migo → **Add Workspace** → enter `http://<your-server-ip>:8080`.
 
-Your server will automatically redeploy whenever a new version is published.
+Watchtower checks for new server images every 5 minutes and automatically restarts the container when an update is available.
 
 ## License
 

@@ -92,7 +92,7 @@ export function AddWorkspaceDialog({ open, onOpenChange }: AddWorkspaceDialogPro
                 setUrl(e.target.value);
                 setError(null);
               }}
-              placeholder="http://localhost:8080"
+              placeholder="http://localhost:3000"
               className="bg-muted/50 border-0 focus-visible:ring-0"
             />
           </div>

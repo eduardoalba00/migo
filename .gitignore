@@ -7,5 +7,6 @@ out
 *.db-wal
 .env
 .env.local
+.env.prod
 *uploads/
 *settings.local.json

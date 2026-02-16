@@ -1,6 +1,6 @@
 export class ApiClient {
   private accessToken: string | null = null;
-  private baseUrl: string = "http://localhost:8080";
+  private baseUrl: string = "http://localhost:3000";
 
   setBaseUrl(url: string) {
     this.baseUrl = url.replace(/\/+$/, "");

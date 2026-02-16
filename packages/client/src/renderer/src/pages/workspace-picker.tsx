@@ -44,17 +44,15 @@ export function WorkspacePicker() {
                       <p className="font-medium truncate">{workspace.name}</p>
                       <p className="text-xs text-muted-foreground truncate">{workspace.url}</p>
                     </div>
-                    {workspace.id !== "default" && (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          removeWorkspace(workspace.id);
-                        }}
-                        className="shrink-0 p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    )}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        removeWorkspace(workspace.id);
+                      }}
+                      className="shrink-0 p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
                   </button>
                 ))}
               </div>

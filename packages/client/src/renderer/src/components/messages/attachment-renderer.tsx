@@ -9,7 +9,7 @@ interface AttachmentRendererProps {
 function getFullUrl(url: string): string {
   const workspace = useWorkspaceStore.getState();
   const active = workspace.workspaces.find((w) => w.id === workspace.activeWorkspaceId);
-  const baseUrl = active?.url || "http://localhost:8080";
+  const baseUrl = active?.url || "http://localhost:3000";
   return `${baseUrl}${url}`;
 }
 

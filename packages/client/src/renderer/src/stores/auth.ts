@@ -167,7 +167,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
       const { tokens, user } = parsed?.state ?? parsed;
       if (tokens) {
         const id = nanoid();
-        const workspace = { id, name: "Local Server", url: "http://localhost:8080" };
+        const workspace = { id, name: "Local Server", url: "http://localhost:3000" };
 
         localStorage.setItem(
           "migo-workspaces",

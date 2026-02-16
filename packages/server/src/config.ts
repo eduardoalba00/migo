@@ -21,15 +21,15 @@ export interface Config {
 
 export function loadConfig(): Config {
   return {
-    port: parseInt(process.env.PORT || "8080", 10),
+    port: parseInt(process.env.PORT || "3000", 10),
     host: process.env.HOST || "0.0.0.0",
-    databaseUrl: process.env.DATABASE_URL || "postgres://localhost:5432/migo",
+    databaseUrl: process.env.DATABASE_URL || "postgres://localhost:5433/migo",
     jwtAccessSecret: process.env.JWT_ACCESS_SECRET || crypto.randomBytes(32).toString("hex"),
     jwtRefreshSecret: process.env.JWT_REFRESH_SECRET || crypto.randomBytes(32).toString("hex"),
     accessTokenExpiry: process.env.ACCESS_TOKEN_EXPIRY || "15m",
     refreshTokenExpiry: process.env.REFRESH_TOKEN_EXPIRY || "7d",
-    livekitUrl: process.env.LIVEKIT_URL || "ws://localhost:7880",
-    livekitPublicUrl: process.env.LIVEKIT_PUBLIC_URL || process.env.LIVEKIT_URL || "ws://localhost:7880",
+    livekitUrl: process.env.LIVEKIT_URL || "ws://localhost:7890",
+    livekitPublicUrl: process.env.LIVEKIT_PUBLIC_URL || process.env.LIVEKIT_URL || "ws://localhost:7890",
     livekitApiKey: process.env.LIVEKIT_API_KEY || "devkey",
     livekitApiSecret: process.env.LIVEKIT_API_SECRET || "secret",
     uploadDir: process.env.UPLOAD_DIR || "./uploads",
