@@ -141,7 +141,7 @@ export class MediasoupManager {
           ...(announcedAddress ? { announcedAddress } : {}),
         },
       ],
-      initialAvailableOutgoingBitrate: 2_000_000,
+      initialAvailableOutgoingBitrate: 8_000_000,
       enableUdp: true,
       enableTcp: true,
       preferUdp: true,

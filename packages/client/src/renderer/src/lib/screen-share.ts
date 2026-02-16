@@ -33,7 +33,7 @@ export class ScreenShareManager {
       throw new Error("Device not initialized — call initDevice() first");
     }
 
-    const presetConfig = preset ? CapturePresets[preset] : CapturePresets["1080p60"];
+    const presetConfig = preset ? CapturePresets[preset] : CapturePresets["1440p60"];
 
     // 1. Capture the screen/window and get a MediaStreamTrack
     this.capture = new ScreenCapture({
@@ -89,7 +89,7 @@ export class ScreenShareManager {
         },
       ],
       codecOptions: {
-        videoGoogleStartBitrate: 1000,
+        videoGoogleStartBitrate: 4000,
       },
     });
 

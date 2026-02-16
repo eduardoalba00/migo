@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { WsOpcode } from "@migo/shared";
+import type { CapturePreset } from "@/lib/screen-capture";
 import type { VoiceState, VoiceChannelUser } from "@migo/shared";
 import { livekitManager } from "@/lib/livekit";
 import { ScreenShareManager } from "@/lib/screen-share";
@@ -33,7 +34,7 @@ interface VoiceStoreState {
   getChannelUsers: (channelId: string) => VoiceChannelUser[];
   setUserVolume: (userId: string, volume: number) => void;
   toggleScreenShare: () => void;
-  startScreenShare: (sourceId: string) => Promise<void>;
+  startScreenShare: (sourceId: string, preset?: CapturePreset) => Promise<void>;
   stopScreenShare: () => void;
   handleScreenShareStart: (data: { userId: string; channelId: string; producerId?: string }) => void;
   handleScreenShareStop: (data: { userId: string }) => void;
@@ -356,12 +357,12 @@ export const useVoiceStore = create<VoiceStoreState>()((set, get) => ({
     }
   },
 
-  startScreenShare: async (sourceId: string) => {
+  startScreenShare: async (sourceId: string, preset?: CapturePreset) => {
     set({ showScreenSharePicker: false });
     if (!screenShareManager) return;
 
     try {
-      const { producerId, track } = await screenShareManager.startSharing(sourceId);
+      const { producerId, track } = await screenShareManager.startSharing(sourceId, preset);
       currentProducerId = producerId;
       set((s) => ({
         isScreenSharing: true,

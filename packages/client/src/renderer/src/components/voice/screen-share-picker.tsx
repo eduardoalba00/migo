@@ -2,12 +2,20 @@ import { useEffect, useState } from "react";
 import { Monitor } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { useVoiceStore } from "@/stores/voice";
+import type { CapturePreset } from "@/lib/screen-capture";
+
+const qualityOptions: { value: CapturePreset; label: string }[] = [
+  { value: "1080p60", label: "1080p 60fps" },
+  { value: "1440p60", label: "1440p 60fps" },
+  { value: "4k30", label: "4K 30fps" },
+];
 
 export function ScreenSharePicker() {
   const showPicker = useVoiceStore((s) => s.showScreenSharePicker);
   const startScreenShare = useVoiceStore((s) => s.startScreenShare);
   const [sources, setSources] = useState<ScreenSource[]>([]);
   const [loading, setLoading] = useState(true);
+  const [preset, setPreset] = useState<CapturePreset>("1440p60");
 
   useEffect(() => {
     if (!showPicker) return;
@@ -24,7 +32,7 @@ export function ScreenSharePicker() {
   };
 
   const handleSelect = (sourceId: string) => {
-    startScreenShare(sourceId);
+    startScreenShare(sourceId, preset);
   };
 
   return (
@@ -34,6 +42,20 @@ export function ScreenSharePicker() {
           <DialogTitle>Share Your Screen</DialogTitle>
           <DialogDescription>Choose a screen or window to share</DialogDescription>
         </DialogHeader>
+        <div className="flex items-center gap-2">
+          <label className="text-sm font-medium text-muted-foreground">Quality</label>
+          <select
+            value={preset}
+            onChange={(e) => setPreset(e.target.value as CapturePreset)}
+            className="h-8 rounded-md border border-border bg-background px-2 text-sm"
+          >
+            {qualityOptions.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        </div>
         {loading ? (
           <div className="flex items-center justify-center py-12 text-muted-foreground">
             Loading sources...
