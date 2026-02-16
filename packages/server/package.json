@@ -1,6 +1,6 @@
 {
   "name": "@migo/server",
-  "version": "0.24.1",
+  "version": "0.25.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -21,7 +21,6 @@
     "fastify": "^5.3.3",
     "jose": "^6.0.11",
     "livekit-server-sdk": "^2.9.1",
-
     "postgres": "^3.4.5",
     "zod": "^4.3.6"
   },
