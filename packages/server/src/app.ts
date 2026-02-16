@@ -68,9 +68,9 @@ export async function buildApp(config: Config, db: AppDatabase) {
 
   // Routes
   await app.register(authRoutes(db, authService));
-  await app.register(serverRoutes(db, authService, serverService, pubsub));
+  await app.register(serverRoutes(db, authService, serverService, pubsub, connectionManager));
   await app.register(channelRoutes(db, authService, serverService, pubsub));
-  await app.register(inviteRoutes(db, authService, serverService, pubsub));
+  await app.register(inviteRoutes(db, authService, serverService, pubsub, connectionManager));
   await app.register(messageRoutes(db, authService, pubsub));
   await app.register(uploadRoutes(db, authService, config));
   await app.register(roleRoutes(db, authService, serverService));

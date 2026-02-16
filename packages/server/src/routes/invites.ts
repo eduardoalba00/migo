@@ -18,6 +18,7 @@ import { createAuthMiddleware } from "../middleware/auth.js";
 import { fastifyRoute } from "../lib/route-utils.js";
 import { generateInviteCode } from "../lib/route-utils.js";
 import type { PubSub } from "../ws/pubsub.js";
+import type { ConnectionManager } from "../ws/connection.js";
 
 function userToPublic(user: typeof users.$inferSelect) {
   return {
@@ -37,6 +38,7 @@ export function inviteRoutes(
   authService: AuthService,
   serverService: ServerService,
   pubsub: PubSub,
+  connectionManager: ConnectionManager,
 ) {
   return async function (app: FastifyInstance) {
     const requireAuth = createAuthMiddleware(authService);
@@ -197,6 +199,9 @@ export function inviteRoutes(
 
       const server = (await db.select().from(servers).where(eq(servers.id, invite.serverId)).then(r => r[0]))!;
       const user = (await db.select().from(users).where(eq(users.id, request.user.sub)).then(r => r[0]))!;
+
+      // Subscribe the joining user to this server's events before broadcasting
+      connectionManager.addServerSubscription(request.user.sub, invite.serverId);
 
       pubsub.publish(`server:${invite.serverId}`, {
         op: 0,

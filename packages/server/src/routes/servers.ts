@@ -13,6 +13,7 @@ import type { ServerService } from "../services/server.js";
 import { createAuthMiddleware } from "../middleware/auth.js";
 import { fastifyRoute } from "../lib/route-utils.js";
 import type { PubSub } from "../ws/pubsub.js";
+import type { ConnectionManager } from "../ws/connection.js";
 
 function userToPublic(user: typeof users.$inferSelect) {
   return {
@@ -32,6 +33,7 @@ export function serverRoutes(
   authService: AuthService,
   serverService: ServerService,
   pubsub: PubSub,
+  connectionManager: ConnectionManager,
 ) {
   return async function (app: FastifyInstance) {
     const requireAuth = createAuthMiddleware(authService);
@@ -241,6 +243,8 @@ export function serverRoutes(
         .where(eq(serverMembers.id, member.id))
         ;
 
+      connectionManager.removeServerSubscription(request.user.sub, serverId);
+
       pubsub.publish(`server:${serverId}`, {
         op: 0,
         t: "MEMBER_LEAVE",
@@ -283,6 +287,8 @@ export function serverRoutes(
         .where(eq(serverMembers.id, member.id))
         ;
 
+      connectionManager.removeServerSubscription(userId, serverId);
+
       pubsub.publish(`server:${serverId}`, {
         op: 0,
         t: "MEMBER_LEAVE",
@@ -317,6 +323,8 @@ export function serverRoutes(
           ),
         )
         ;
+
+      connectionManager.removeServerSubscription(userId, serverId);
 
       // Create ban record
       await db.insert(bans).values({

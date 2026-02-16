@@ -75,6 +75,32 @@ export class ConnectionManager {
     }
   }
 
+  addServerSubscription(userId: string, serverId: string): void {
+    const conn = this.connections.get(userId);
+    if (!conn || conn.subscribedServers.has(serverId)) return;
+
+    const handler = (message: unknown) => {
+      if (conn.socket.readyState === conn.socket.OPEN) {
+        conn.socket.send(JSON.stringify(message));
+      }
+    };
+    this.pubsub.subscribe(`server:${serverId}`, handler);
+    conn.subscribedServers.add(serverId);
+    (conn as any)[`_handler_server:${serverId}`] = handler;
+  }
+
+  removeServerSubscription(userId: string, serverId: string): void {
+    const conn = this.connections.get(userId);
+    if (!conn || !conn.subscribedServers.has(serverId)) return;
+
+    const handler = (conn as any)[`_handler_server:${serverId}`];
+    if (handler) {
+      this.pubsub.unsubscribe(`server:${serverId}`, handler);
+      delete (conn as any)[`_handler_server:${serverId}`];
+    }
+    conn.subscribedServers.delete(serverId);
+  }
+
   broadcastToServer(serverId: string, message: unknown): void {
     this.pubsub.publish(`server:${serverId}`, message);
   }
