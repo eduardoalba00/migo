@@ -1,7 +1,6 @@
 import * as mediasoup from "mediasoup";
 import type {
   Worker,
-  WebRtcServer,
   Router,
   WebRtcTransport,
   Producer,
@@ -54,7 +53,6 @@ interface UserResources {
 
 export class MediasoupManager {
   private worker: Worker | null = null;
-  private webRtcServer: WebRtcServer | null = null;
   private rooms = new Map<string, Room>(); // channelId → Room
   private userResources = new Map<string, UserResources>(); // `${channelId}:${userId}` → resources
   private config: Config;
@@ -65,28 +63,14 @@ export class MediasoupManager {
 
   async init(): Promise<void> {
     this.worker = await mediasoup.createWorker({
+      rtcMinPort: this.config.mediasoupMinPort,
+      rtcMaxPort: this.config.mediasoupMaxPort,
       logLevel: "warn",
     });
 
     this.worker.on("died", () => {
       console.error("mediasoup Worker died, exiting in 2 seconds...");
       setTimeout(() => process.exit(1), 2000);
-    });
-
-    this.webRtcServer = await this.worker.createWebRtcServer({
-      listenInfos: [
-        {
-          protocol: "tcp",
-          ip: "0.0.0.0",
-          port: this.config.mediasoupPort,
-          ...(this.config.mediasoupAnnouncedIp
-            ? { announcedAddress: this.config.mediasoupAnnouncedIp }
-            : {}),
-          ...(this.config.mediasoupAnnouncedPort
-            ? { announcedPort: this.config.mediasoupAnnouncedPort }
-            : {}),
-        },
-      ],
     });
   }
 
@@ -142,11 +126,25 @@ export class MediasoupManager {
   }> {
     const room = await this.getOrCreateRoom(channelId);
 
-    if (!this.webRtcServer) throw new Error("WebRtcServer not initialized");
+    const announcedAddress = this.config.mediasoupAnnouncedIp || undefined;
 
     const transport = await room.router.createWebRtcTransport({
-      webRtcServer: this.webRtcServer,
+      listenInfos: [
+        {
+          protocol: "udp",
+          ip: "0.0.0.0",
+          ...(announcedAddress ? { announcedAddress } : {}),
+        },
+        {
+          protocol: "tcp",
+          ip: "0.0.0.0",
+          ...(announcedAddress ? { announcedAddress } : {}),
+        },
+      ],
       initialAvailableOutgoingBitrate: 8_000_000,
+      enableUdp: true,
+      enableTcp: true,
+      preferUdp: true,
     });
 
     room.transports.set(transport.id, transport);

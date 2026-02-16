@@ -38,5 +38,6 @@ COPY --from=base /app/packages/server/drizzle packages/server/drizzle
 
 ENV NODE_ENV=production
 EXPOSE 8080
-EXPOSE 40000
+EXPOSE 40000-40100/udp
+EXPOSE 40000-40100/tcp
 CMD ["node", "packages/server/dist/index.js"]
