@@ -15,6 +15,8 @@ export interface Config {
   uploadDir: string;
   maxFileSizeMb: number;
   mediasoupPort: number;
+  mediasoupAnnouncedIp: string;
+  mediasoupAnnouncedPort: number | undefined;
 }
 
 export function loadConfig(): Config {
@@ -33,5 +35,9 @@ export function loadConfig(): Config {
     uploadDir: process.env.UPLOAD_DIR || "./uploads",
     maxFileSizeMb: parseInt(process.env.MAX_FILE_SIZE_MB || "25", 10),
     mediasoupPort: parseInt(process.env.MEDIASOUP_PORT || "40000", 10),
+    mediasoupAnnouncedIp: process.env.MEDIASOUP_ANNOUNCED_IP || "",
+    mediasoupAnnouncedPort: process.env.MEDIASOUP_ANNOUNCED_PORT
+      ? parseInt(process.env.MEDIASOUP_ANNOUNCED_PORT, 10)
+      : undefined,
   };
 }

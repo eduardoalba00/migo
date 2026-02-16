@@ -79,6 +79,12 @@ export class MediasoupManager {
           protocol: "tcp",
           ip: "0.0.0.0",
           port: this.config.mediasoupPort,
+          ...(this.config.mediasoupAnnouncedIp
+            ? { announcedAddress: this.config.mediasoupAnnouncedIp }
+            : {}),
+          ...(this.config.mediasoupAnnouncedPort
+            ? { announcedPort: this.config.mediasoupAnnouncedPort }
+            : {}),
         },
       ],
     });
