@@ -51,8 +51,8 @@ importers:
         specifier: ^3.13.18
         version: 3.13.18(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       buttercap:
-        specifier: ^0.2.2
-        version: 0.2.2
+        specifier: ^0.3.0
+        version: 0.3.0
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
@@ -1934,13 +1934,13 @@ packages:
   builder-util@25.1.7:
     resolution: {integrity: sha512-7jPjzBwEGRbwNcep0gGNpLXG9P94VA3CPAZQCzxkFXiV2GMQKlziMbY//rXPI7WKfhsvGgFXjTcXdBEwgXw9ww==}
 
-  buttercap-win32-x64-msvc@0.2.2:
-    resolution: {integrity: sha512-/D6hgl9eGoY1XW2Cog2SPaB1PXDX/ezhkP5+5zl2Gkmaap+Rish2FOd+4FkDTongCY6zs1oN4NrxmmOGweEHeQ==}
+  buttercap-win32-x64-msvc@0.3.0:
+    resolution: {integrity: sha512-U9A7aH++9izRQugbiZ46tjpGYRxFFYT6iP7cmHK6Fo93k4xoss+GfixJG34UDX7p7X2R0CF8LrtYOgmkDrXpJQ==}
     cpu: [x64]
     os: [win32]
 
-  buttercap@0.2.2:
-    resolution: {integrity: sha512-6OmwUJe1+lzwgR3NW5TsDEUp737D4A28e3O86YFjp/DVgIxQBL7L5mxMrcCiWdV1NC4TkMOiUQpu9LSzdeeXmA==}
+  buttercap@0.3.0:
+    resolution: {integrity: sha512-Oqc0jGgjN0KXtxyLeHgy2NrJkJRTZuIZW822B/wLYY031VF8SuGXUar321Kd5xFLtsn+Bk+6QAXcaJakk4OjFw==}
 
   cac@6.7.14:
     resolution: {integrity: sha512-b6Ilus+c3RrdDk+JhLKUAQfzzgLEPy6wcXqS7f/xe1EETvsDP6GORG7SFuOs6cID5YkqchW/LXZbX5bc8j7ZcQ==}
@@ -5563,12 +5563,12 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  buttercap-win32-x64-msvc@0.2.2:
+  buttercap-win32-x64-msvc@0.3.0:
     optional: true
 
-  buttercap@0.2.2:
+  buttercap@0.3.0:
     optionalDependencies:
-      buttercap-win32-x64-msvc: 0.2.2
+      buttercap-win32-x64-msvc: 0.3.0
 
   cac@6.7.14: {}
 
