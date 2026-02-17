@@ -18,10 +18,10 @@ const CapturePresets: Record<
   CapturePreset,
   { fps: number; bitrate: number }
 > = {
-  "720p30": { fps: 30, bitrate: 2_500_000 },
-  "1080p30": { fps: 30, bitrate: 4_000_000 },
-  "1080p60": { fps: 60, bitrate: 6_000_000 },
-  "1440p60": { fps: 60, bitrate: 12_000_000 },
+  "720p30": { fps: 30, bitrate: 8_000_000 },
+  "1080p30": { fps: 30, bitrate: 15_000_000 },
+  "1080p60": { fps: 60, bitrate: 25_000_000 },
+  "1440p60": { fps: 60, bitrate: 50_000_000 },
 };
 
 interface VoiceStoreState {
