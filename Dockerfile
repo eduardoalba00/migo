@@ -7,7 +7,6 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY packages/shared/package.json packages/shared/
 COPY packages/server/package.json packages/server/
 COPY packages/client/package.json packages/client/
-COPY packages/screen-capture/package.json packages/screen-capture/
 
 # Install dependencies (needs all workspace package.jsons for frozen lockfile)
 RUN pnpm install --frozen-lockfile
@@ -27,7 +26,6 @@ COPY --from=base /app/package.json /app/pnpm-lock.yaml /app/pnpm-workspace.yaml 
 COPY --from=base /app/packages/shared/package.json packages/shared/
 COPY --from=base /app/packages/server/package.json packages/server/
 COPY --from=base /app/packages/client/package.json packages/client/
-COPY --from=base /app/packages/screen-capture/package.json packages/screen-capture/
 RUN pnpm install --frozen-lockfile --prod
 
 COPY --from=base /app/packages/shared/dist packages/shared/dist
