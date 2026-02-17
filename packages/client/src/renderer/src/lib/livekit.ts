@@ -65,6 +65,11 @@ export class LiveKitManager {
   }
 
   async connect(token: string, url: string): Promise<void> {
+    // Clean up any existing connection to prevent leaked Room/WebSocket
+    if (this.room) {
+      await this.disconnect();
+    }
+
     this.room = new Room({
       adaptiveStream: false,
       dynacast: false,
@@ -415,7 +420,14 @@ export class LiveKitManager {
         if (!this.screenDecoders.has(identity)) {
           const decoder = new ScreenDecoder();
           this.screenDecoders.set(identity, decoder);
-          // Emit the output track to the voice store
+          this.screenTrackCallback?.(identity, decoder.getTrack(), "add");
+        } else if (this.screenDecoders.get(identity)!.isStopped()) {
+          // Old decoder was stopped (e.g. reconnect) — replace it
+          const old = this.screenDecoders.get(identity)!;
+          this.screenTrackCallback?.(identity, old.getTrack(), "remove");
+          old.stop();
+          const decoder = new ScreenDecoder();
+          this.screenDecoders.set(identity, decoder);
           this.screenTrackCallback?.(identity, decoder.getTrack(), "add");
         }
 

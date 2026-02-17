@@ -314,6 +314,7 @@ export class ScreenDecoder {
   private configured = false;
   private receivedKeyframe = false;
   private assembler = new ChunkAssembler();
+  private writerReady = true;
 
   constructor() {
     this.generator = new MediaStreamTrackGenerator({ kind: "video" });
@@ -321,7 +322,17 @@ export class ScreenDecoder {
 
     this.decoder = new VideoDecoder({
       output: (frame: VideoFrame) => {
-        this.writer.write(frame).catch(() => frame.close());
+        // Drop frames while the WritableStream has backpressure to prevent
+        // unbounded queueing of GPU-backed VideoFrame objects.
+        if (!this.writerReady) {
+          frame.close();
+          return;
+        }
+        this.writerReady = false;
+        this.writer.write(frame).then(
+          () => { frame.close(); this.writerReady = true; },
+          () => { frame.close(); this.writerReady = true; },
+        );
       },
       error: (e) => console.error("[ScreenDecoder] Error:", e),
     });
@@ -329,6 +340,10 @@ export class ScreenDecoder {
 
   getTrack(): MediaStreamTrack {
     return this.generator;
+  }
+
+  isStopped(): boolean {
+    return this.decoder === null;
   }
 
   feedChunk(msg: Uint8Array): void {

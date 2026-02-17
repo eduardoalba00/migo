@@ -13,6 +13,8 @@ class PCMPlayerProcessor extends AudioWorkletProcessor {
     this.port.onmessage = (e) => {
       // e.data is a Uint8Array of interleaved Float32 stereo samples
       const f32 = new Float32Array(e.data.buffer, e.data.byteOffset, e.data.byteLength / 4);
+      // Cap at ~200ms of audio (10 chunks at 20ms each) to prevent unbounded growth
+      if (this.buffer.length >= 10) this.buffer.shift();
       this.buffer.push(f32);
     };
   }
