@@ -3,6 +3,7 @@ import { WsOpcode } from "@migo/shared";
 import type { CapturePreset } from "@/components/voice/screen-share-picker";
 import type { VoiceState, VoiceChannelUser } from "@migo/shared";
 import { livekitManager } from "@/lib/livekit";
+import { PCMAudioBridge } from "@/lib/pcm-audio-bridge";
 import { wsManager } from "@/lib/ws";
 import {
   playJoinSound,
@@ -15,32 +16,12 @@ import { useMemberStore } from "./members";
 
 const CapturePresets: Record<
   CapturePreset,
-  { maxWidth: number; maxHeight: number; maxFrameRate: number; bitrate: number }
+  { fps: number; bitrate: number }
 > = {
-  "720p30": {
-    maxWidth: 3840,
-    maxHeight: 720,
-    maxFrameRate: 30,
-    bitrate: 2_500_000,
-  },
-  "1080p30": {
-    maxWidth: 5120,
-    maxHeight: 1080,
-    maxFrameRate: 30,
-    bitrate: 4_000_000,
-  },
-  "1080p60": {
-    maxWidth: 5120,
-    maxHeight: 1080,
-    maxFrameRate: 60,
-    bitrate: 6_000_000,
-  },
-  "1440p60": {
-    maxWidth: 5120,
-    maxHeight: 1440,
-    maxFrameRate: 60,
-    bitrate: 12_000_000,
-  },
+  "720p30": { fps: 30, bitrate: 2_500_000 },
+  "1080p30": { fps: 30, bitrate: 4_000_000 },
+  "1080p60": { fps: 60, bitrate: 6_000_000 },
+  "1440p60": { fps: 60, bitrate: 12_000_000 },
 };
 
 interface VoiceStoreState {
@@ -68,7 +49,7 @@ interface VoiceStoreState {
   getChannelUsers: (channelId: string) => VoiceChannelUser[];
   setUserVolume: (userId: string, volume: number) => void;
   toggleScreenShare: () => void;
-  startScreenShare: (sourceId: string, preset?: CapturePreset) => Promise<void>;
+  startScreenShare: (target: { type: string; id: number; pid?: number }, preset?: CapturePreset) => Promise<void>;
   stopScreenShare: () => void;
   handleScreenShareStart: (data: { userId: string; channelId: string }) => void;
   handleScreenShareStop: (data: { userId: string }) => void;
@@ -111,8 +92,9 @@ function voiceSignal(action: string, data?: any): Promise<any> {
   });
 }
 
-// Module-level capture stream for cleanup
-let activeStream: MediaStream | null = null;
+// Module-level buttercap cleanup state
+let cleanupScreenCapture: (() => void) | null = null;
+let audioBridge: PCMAudioBridge | null = null;
 
 export const useVoiceStore = create<VoiceStoreState>()((set, get) => ({
   currentChannelId: null,
@@ -214,10 +196,11 @@ export const useVoiceStore = create<VoiceStoreState>()((set, get) => ({
     livekitManager.setScreenTrackCallback(null);
 
     // Stop active screen capture if any
-    if (activeStream) {
-      for (const track of activeStream.getTracks()) track.stop();
-      activeStream = null;
-    }
+    window.screenAPI.stop();
+    cleanupScreenCapture?.();
+    cleanupScreenCapture = null;
+    audioBridge?.dispose();
+    audioBridge = null;
 
     // Tell server we left
     wsManager.send({
@@ -435,49 +418,56 @@ export const useVoiceStore = create<VoiceStoreState>()((set, get) => ({
     }
   },
 
-  startScreenShare: async (sourceId: string, preset?: CapturePreset) => {
+  startScreenShare: async (target: { type: string; id: number; pid?: number }, preset?: CapturePreset) => {
     set({ showScreenSharePicker: false });
 
     try {
       const presetConfig = CapturePresets[preset ?? "1440p60"];
 
-      // Capture video + system audio using Electron's desktopCapturer
-      activeStream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          mandatory: { chromeMediaSource: "desktop" },
-        } as any,
-        video: {
-          mandatory: {
-            chromeMediaSource: "desktop",
-            chromeMediaSourceId: sourceId,
-            maxWidth: presetConfig.maxWidth,
-            maxHeight: presetConfig.maxHeight,
-            minFrameRate: presetConfig.maxFrameRate,
-            maxFrameRate: presetConfig.maxFrameRate,
-          },
-        } as any,
-      });
+      // Set up audio bridge: PCM from buttercap → AudioWorklet → MediaStreamTrack
+      audioBridge = new PCMAudioBridge();
+      const audioTrack = await audioBridge.init();
 
-      const track = activeStream.getVideoTracks()[0];
-      track.contentHint = "motion";
-
-      // Encode video with WebCodecs (hardware-accelerated) via DataChannel
-      await livekitManager.publishScreenEncoded(track, {
-        framerate: presetConfig.maxFrameRate,
+      // Start buttercap capture in main process
+      await window.screenAPI.start({
+        targetType: target.type,
+        targetId: target.id,
+        fps: presetConfig.fps,
         bitrate: presetConfig.bitrate,
+        cursor: true,
+        audioPid: target.pid,
       });
 
-      // Publish system audio via LiveKit (if captured — only works on Windows)
-      const audioTrack = activeStream.getAudioTracks()[0];
-      if (audioTrack) {
-        await livekitManager.publishScreenAudio(audioTrack);
-      }
+      // Subscribe to video packets from buttercap → serialize → DataChannel
+      const unsubVideo = window.screenAPI.onVideoPacket((packet) => {
+        livekitManager.sendScreenPacket(packet.data, packet.timestampUs, packet.keyframe);
+      });
 
-      const myUserId = useAuthStore.getState().user?.id ?? "";
-      set((s) => ({
-        isScreenSharing: true,
-        screenShareTracks: { ...s.screenShareTracks, [myUserId]: track },
-      }));
+      // Subscribe to audio packets from buttercap → feed into AudioWorklet
+      const unsubAudio = window.screenAPI.onAudioPacket((packet) => {
+        audioBridge?.feedPCM(packet.data);
+      });
+
+      const unsubError = window.screenAPI.onError((msg) => {
+        console.error("[buttercap] Error:", msg);
+      });
+
+      const unsubStopped = window.screenAPI.onStopped(() => {
+        get().stopScreenShare();
+      });
+
+      // Store cleanup functions
+      cleanupScreenCapture = () => {
+        unsubVideo();
+        unsubAudio();
+        unsubError();
+        unsubStopped();
+      };
+
+      // Publish audio track via LiveKit
+      await livekitManager.publishScreenAudio(audioTrack);
+
+      set({ isScreenSharing: true });
 
       // Notify server about screen share
       wsManager.send({
@@ -490,30 +480,30 @@ export const useVoiceStore = create<VoiceStoreState>()((set, get) => ({
       });
     } catch (err) {
       console.error("Failed to start screen share:", err);
-      if (activeStream) {
-        for (const t of activeStream.getTracks()) t.stop();
-        activeStream = null;
-      }
+      window.screenAPI.stop();
+      cleanupScreenCapture?.();
+      cleanupScreenCapture = null;
+      audioBridge?.dispose();
+      audioBridge = null;
       set({ isScreenSharing: false });
     }
   },
 
   stopScreenShare: () => {
-    livekitManager.stopScreenEncoded();
+    // Stop buttercap capture in main process
+    window.screenAPI.stop();
+    cleanupScreenCapture?.();
+    cleanupScreenCapture = null;
+
+    // Stop LiveKit screen data + audio
+    livekitManager.stopScreenSending();
     livekitManager.unpublishScreenAudio();
 
-    // Stop capture stream
-    if (activeStream) {
-      for (const track of activeStream.getTracks()) track.stop();
-      activeStream = null;
-    }
+    // Dispose audio bridge
+    audioBridge?.dispose();
+    audioBridge = null;
 
-    const userId = useAuthStore.getState().user?.id ?? "";
-    set((s) => {
-      const screenShareTracks = { ...s.screenShareTracks };
-      delete screenShareTracks[userId];
-      return { isScreenSharing: false, screenShareTracks };
-    });
+    set({ isScreenSharing: false });
 
     // Notify server
     wsManager.send({

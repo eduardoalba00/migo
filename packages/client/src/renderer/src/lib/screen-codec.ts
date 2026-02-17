@@ -1,16 +1,13 @@
 /**
- * Custom WebCodecs-based screen share encoding/decoding pipeline.
+ * Screen share encoding/decoding pipeline.
  *
- * Uses WebCodecs VideoEncoder with hardware acceleration (NVENC / Media
- * Foundation / VideoToolbox) instead of WebRTC's software-only codecs.
- * Encoded frames are transported via LiveKit DataChannel and decoded on
- * the receiver with VideoDecoder → MediaStreamTrackGenerator.
+ * Sender side: buttercap produces H.264 packets in the main process.
+ * The renderer serializes them into the binary protocol and chunks
+ * for DataChannel transport.
+ *
+ * Receiver side: ScreenDecoder reassembles chunks, decodes H.264 via
+ * WebCodecs VideoDecoder → MediaStreamTrackGenerator.
  */
-
-declare class MediaStreamTrackProcessor<T> {
-  constructor(init: { track: MediaStreamTrack });
-  readonly readable: ReadableStream<T>;
-}
 
 declare class MediaStreamTrackGenerator extends MediaStreamTrack {
   constructor(init: { kind: string });
@@ -94,7 +91,7 @@ const PKT_CONFIG = 0;
 const PKT_KEY = 1;
 const PKT_DELTA = 2;
 
-function serializeConfig(width: number, height: number, codec: string): Uint8Array {
+export function serializeConfig(width: number, height: number, codec: string): Uint8Array {
   const codecBytes = new TextEncoder().encode(codec);
   const buf = new Uint8Array(5 + codecBytes.length);
   buf[0] = PKT_CONFIG;
@@ -104,7 +101,7 @@ function serializeConfig(width: number, height: number, codec: string): Uint8Arr
   return buf;
 }
 
-function serializeFrame(isKey: boolean, timestamp: number, duration: number, data: Uint8Array): Uint8Array {
+export function serializeFrame(isKey: boolean, timestamp: number, duration: number, data: Uint8Array): Uint8Array {
   const buf = new Uint8Array(9 + data.length);
   buf[0] = isKey ? PKT_KEY : PKT_DELTA;
   const view = new DataView(buf.buffer);
@@ -145,124 +142,167 @@ function deserializePacket(buf: Uint8Array): ParsedPacket {
   };
 }
 
-// ----- Encoder -----
+// ----- SPS resolution parser -----
 
-export interface ScreenEncoderConfig {
-  framerate: number;
-  bitrate: number;
+class BitReader {
+  private data: Uint8Array;
+  private byteOffset = 0;
+  private bitOffset = 0;
+
+  constructor(data: Uint8Array) {
+    this.data = data;
+  }
+
+  readBit(): number {
+    if (this.byteOffset >= this.data.length) return 0;
+    const bit = (this.data[this.byteOffset] >> (7 - this.bitOffset)) & 1;
+    this.bitOffset++;
+    if (this.bitOffset === 8) {
+      this.bitOffset = 0;
+      this.byteOffset++;
+    }
+    return bit;
+  }
+
+  readBits(n: number): number {
+    let val = 0;
+    for (let i = 0; i < n; i++) {
+      val = (val << 1) | this.readBit();
+    }
+    return val;
+  }
+
+  readUE(): number {
+    let leadingZeros = 0;
+    while (this.readBit() === 0) {
+      leadingZeros++;
+      if (leadingZeros > 31) return 0;
+    }
+    if (leadingZeros === 0) return 0;
+    return (1 << leadingZeros) - 1 + this.readBits(leadingZeros);
+  }
+
+  readSE(): number {
+    const val = this.readUE();
+    if (val % 2 === 0) return -(val >> 1);
+    return (val + 1) >> 1;
+  }
 }
 
-export class ScreenEncoder {
-  private encoder: VideoEncoder | null = null;
-  private reader: ReadableStreamDefaultReader<VideoFrame> | null = null;
-  private running = false;
-  private configured = false;
-  private sendChunks: (chunks: Uint8Array[]) => void;
-  private config!: ScreenEncoderConfig;
-  private frameIndex = 0;
-  private keyframeEvery = 120;
-
-  constructor(sendChunks: (chunks: Uint8Array[]) => void) {
-    this.sendChunks = sendChunks;
-  }
-
-  async start(track: MediaStreamTrack, config: ScreenEncoderConfig): Promise<void> {
-    this.config = config;
-    this.keyframeEvery = config.framerate * 2;
-
-    this.encoder = new VideoEncoder({
-      output: (chunk) => {
-        const frameData = new Uint8Array(chunk.byteLength);
-        chunk.copyTo(frameData);
-        const packet = serializeFrame(
-          chunk.type === "key",
-          Math.round(chunk.timestamp / 1000),
-          Math.round((chunk.duration ?? 0) / 1000),
-          frameData,
-        );
-        this.sendChunks(chunkPacket(packet));
-      },
-      error: (e) => console.error("[ScreenEncoder] Error:", e),
-    });
-
-    const processor = new MediaStreamTrackProcessor<VideoFrame>({ track });
-    this.reader = processor.readable.getReader();
-    this.running = true;
-    this.frameIndex = 0;
-    this.configured = false;
-
-    this.readLoop();
-  }
-
-  private async configureFromFrame(width: number, height: number): Promise<void> {
-    const candidates: Array<{ codec: string; hw: HardwareAcceleration }> = [
-      { codec: "avc1.640033", hw: "prefer-hardware" },
-      { codec: "avc1.640033", hw: "prefer-software" },
-    ];
-
-    let chosen = candidates[0];
-    for (const c of candidates) {
-      const support = await VideoEncoder.isConfigSupported({
-        codec: c.codec,
-        width,
-        height,
-        bitrate: this.config.bitrate,
-        framerate: this.config.framerate,
-        hardwareAcceleration: c.hw,
-        latencyMode: "realtime",
-      });
-      if (support.supported) {
-        chosen = c;
-        break;
-      }
+/**
+ * Parse an H.264 Annex B bitstream to find the SPS NAL unit and extract
+ * the coded resolution in pixels.
+ */
+export function parseSPSResolution(annexB: Uint8Array): { width: number; height: number; codec: string } | null {
+  // Find SPS NAL unit (type 7)
+  let spsStart = -1;
+  let nalHeaderIdx = -1;
+  for (let i = 0; i < annexB.length - 4; i++) {
+    let nalByte = -1;
+    if (annexB[i] === 0 && annexB[i + 1] === 0 && annexB[i + 2] === 0 && annexB[i + 3] === 1) {
+      nalByte = i + 4;
+    } else if (annexB[i] === 0 && annexB[i + 1] === 0 && annexB[i + 2] === 1) {
+      nalByte = i + 3;
     }
-
-    this.encoder!.configure({
-      codec: chosen.codec,
-      width,
-      height,
-      bitrate: this.config.bitrate,
-      framerate: this.config.framerate,
-      hardwareAcceleration: chosen.hw,
-      latencyMode: "realtime",
-      avc: { format: "annexb" },
-    });
-
-    this.sendChunks(chunkPacket(serializeConfig(width, height, chosen.codec)));
-    this.configured = true;
+    if (nalByte !== -1 && nalByte < annexB.length && (annexB[nalByte] & 0x1f) === 7) {
+      nalHeaderIdx = nalByte;
+      spsStart = nalByte + 1;
+      break;
+    }
   }
 
-  private async readLoop(): Promise<void> {
-    while (this.running && this.reader && this.encoder) {
-      try {
-        const { value: frame, done } = await this.reader.read();
-        if (done || !frame) break;
+  if (spsStart === -1 || nalHeaderIdx === -1) return null;
 
-        if (!this.configured) {
-          await this.configureFromFrame(frame.displayWidth, frame.displayHeight);
+  let spsEnd = annexB.length;
+  for (let i = spsStart; i < annexB.length - 3; i++) {
+    if (annexB[i] === 0 && annexB[i + 1] === 0 && (annexB[i + 2] === 1 || (annexB[i + 2] === 0 && annexB[i + 3] === 1))) {
+      spsEnd = i;
+      break;
+    }
+  }
+
+  const spsData = annexB.subarray(spsStart, spsEnd);
+  const reader = new BitReader(spsData);
+
+  const profileIdc = reader.readBits(8);
+  const constraintFlags = reader.readBits(8);
+  const levelIdc = reader.readBits(8);
+  reader.readUE(); // seq_parameter_set_id
+
+  // Build proper avc1 codec string from SPS: avc1.PPCCLL
+  const codec = "avc1." +
+    profileIdc.toString(16).padStart(2, "0") +
+    constraintFlags.toString(16).padStart(2, "0") +
+    levelIdc.toString(16).padStart(2, "0");
+
+  let chromaFormatIdc = 1; // default 4:2:0
+  if ([100, 110, 122, 244, 44, 83, 86, 118, 128, 138, 139, 134].includes(profileIdc)) {
+    chromaFormatIdc = reader.readUE();
+    if (chromaFormatIdc === 3) reader.readBits(1);
+    reader.readUE(); // bit_depth_luma_minus8
+    reader.readUE(); // bit_depth_chroma_minus8
+    reader.readBits(1); // qpprime_y_zero_transform_bypass_flag
+    const seqScalingMatrixPresent = reader.readBits(1);
+    if (seqScalingMatrixPresent) {
+      const count = chromaFormatIdc !== 3 ? 8 : 12;
+      for (let i = 0; i < count; i++) {
+        const present = reader.readBits(1);
+        if (present) {
+          const size = i < 6 ? 16 : 64;
+          let lastScale = 8;
+          let nextScale = 8;
+          for (let j = 0; j < size; j++) {
+            if (nextScale !== 0) {
+              const delta = reader.readSE();
+              nextScale = (lastScale + delta + 256) % 256;
+            }
+            lastScale = nextScale === 0 ? lastScale : nextScale;
+          }
         }
-
-        const keyFrame = this.frameIndex % this.keyframeEvery === 0;
-        this.frameIndex++;
-
-        this.encoder.encode(frame, { keyFrame });
-        frame.close();
-      } catch (e) {
-        if (this.running) console.error("[ScreenEncoder] Read error:", e);
-        break;
       }
     }
   }
 
-  stop(): void {
-    this.running = false;
-    this.reader?.cancel().catch(() => {});
-    try {
-      this.encoder?.close();
-    } catch {}
-    this.reader = null;
-    this.encoder = null;
+  reader.readUE(); // log2_max_frame_num_minus4
+  const picOrderCntType = reader.readUE();
+  if (picOrderCntType === 0) {
+    reader.readUE();
+  } else if (picOrderCntType === 1) {
+    reader.readBits(1);
+    reader.readSE();
+    reader.readSE();
+    const numRefFrames = reader.readUE();
+    for (let i = 0; i < numRefFrames; i++) reader.readSE();
   }
+
+  reader.readUE(); // max_num_ref_frames
+  reader.readBits(1); // gaps_in_frame_num_value_allowed_flag
+
+  const picWidthInMbsMinus1 = reader.readUE();
+  const picHeightInMapUnitsMinus1 = reader.readUE();
+
+  let width = (picWidthInMbsMinus1 + 1) * 16;
+  let height = (picHeightInMapUnitsMinus1 + 1) * 16;
+
+  const frameMbsOnlyFlag = reader.readBits(1);
+  if (!frameMbsOnlyFlag) reader.readBits(1); // mb_adaptive_frame_field_flag
+  reader.readBits(1); // direct_8x8_inference_flag
+
+  // Frame cropping adjusts the macroblock-aligned size to the actual resolution
+  const frameCroppingFlag = reader.readBits(1);
+  if (frameCroppingFlag) {
+    const cropLeft = reader.readUE();
+    const cropRight = reader.readUE();
+    const cropTop = reader.readUE();
+    const cropBottom = reader.readUE();
+    // Crop units depend on chroma format (2 for 4:2:0, 1 for 4:4:4)
+    const cropUnitX = chromaFormatIdc === 3 ? 1 : 2;
+    const cropUnitY = (chromaFormatIdc === 3 ? 1 : 2) * (frameMbsOnlyFlag ? 1 : 2);
+    width -= (cropLeft + cropRight) * cropUnitX;
+    height -= (cropTop + cropBottom) * cropUnitY;
+  }
+
+  return { width, height, codec };
 }
 
 // ----- Decoder -----
@@ -318,17 +358,24 @@ export class ScreenDecoder {
       this.receivedKeyframe = true;
     }
 
+    // Skip if decoder queue is backing up (prevents cascading artifacts)
+    if (this.decoder!.decodeQueueSize > 5) {
+      if (!parsed.isKey) return; // drop delta frames, wait for next keyframe
+    }
+
     try {
       this.decoder!.decode(
         new EncodedVideoChunk({
           type: parsed.isKey ? "key" : "delta",
-          timestamp: (parsed.timestamp ?? 0) * 1000,
-          duration: (parsed.duration ?? 0) * 1000,
+          timestamp: parsed.timestamp ?? 0,
+          duration: parsed.duration ?? 0,
           data: parsed.data,
         }),
       );
     } catch (e) {
       console.error("[ScreenDecoder] Decode error:", e);
+      // Reset on decode error — wait for next keyframe
+      this.receivedKeyframe = false;
     }
   }
 

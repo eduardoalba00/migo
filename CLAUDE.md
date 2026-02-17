@@ -61,12 +61,11 @@ Start: `docker compose -f docker-compose.prod.yml --env-file .env.prod up -d`
 
 ## Architecture
 
-**pnpm monorepo** with four packages:
+**pnpm monorepo** with three packages:
 
 - **`@migo/server`** — Fastify 5 REST API + WebSocket server. PostgreSQL via Drizzle ORM + postgres.js. Voice + screen sharing via LiveKit. Auth via argon2 + JWT (jose).
-- **`@migo/client`** — Electron 40 desktop app. React 19 renderer built with electron-vite. State management with Zustand. Styling with Tailwind CSS 4 (OKLCH color tokens). UI primitives from Radix UI.
+- **`@migo/client`** — Electron 40 desktop app. React 19 renderer built with electron-vite. State management with Zustand. Styling with Tailwind CSS 4 (OKLCH color tokens). UI primitives from Radix UI. Screen capture via [buttercap](https://github.com/eduardoalba00/buttercap) (Windows native addon: WGC + GPU H.264 encoding + WASAPI audio).
 - **`@migo/shared`** — Zod schemas, TypeScript types, WebSocket protocol definitions, and API route constants shared between client and server.
-- **`@migo/screen-capture`** — Rust native addon (NAPI-RS) for cross-platform screen/window capture using the `scap` crate.
 
 ### Shared package resolution
 

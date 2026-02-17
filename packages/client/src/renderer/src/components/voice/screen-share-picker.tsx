@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Monitor } from "lucide-react";
+import { Monitor, AppWindow } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { useVoiceStore } from "@/stores/voice";
 
@@ -15,7 +15,7 @@ const qualityOptions: { value: CapturePreset; label: string }[] = [
 export function ScreenSharePicker() {
   const showPicker = useVoiceStore((s) => s.showScreenSharePicker);
   const startScreenShare = useVoiceStore((s) => s.startScreenShare);
-  const [sources, setSources] = useState<ScreenSource[]>([]);
+  const [sources, setSources] = useState<ScreenSources | null>(null);
   const [loading, setLoading] = useState(true);
   const [preset, setPreset] = useState<CapturePreset>("1440p60");
 
@@ -25,7 +25,7 @@ export function ScreenSharePicker() {
     window.screenAPI
       .getSources()
       .then((s) => setSources(s))
-      .catch(() => setSources([]))
+      .catch(() => setSources(null))
       .finally(() => setLoading(false));
   }, [showPicker]);
 
@@ -33,9 +33,15 @@ export function ScreenSharePicker() {
     useVoiceStore.setState({ showScreenSharePicker: false });
   };
 
-  const handleSelect = (sourceId: string) => {
-    startScreenShare(sourceId, preset);
+  const handleSelectDisplay = (id: number) => {
+    startScreenShare({ type: "display", id }, preset);
   };
+
+  const handleSelectWindow = (hwnd: number, pid: number) => {
+    startScreenShare({ type: "window", id: hwnd, pid }, preset);
+  };
+
+  const hasNoSources = !sources || (sources.displays.length === 0 && sources.windows.length === 0);
 
   return (
     <Dialog open={showPicker} onOpenChange={(open) => !open && handleClose()}>
@@ -62,36 +68,58 @@ export function ScreenSharePicker() {
           <div className="flex items-center justify-center py-12 text-muted-foreground">
             Loading sources...
           </div>
-        ) : sources.length === 0 ? (
+        ) : hasNoSources ? (
           <div className="flex items-center justify-center py-12 text-muted-foreground">
             No screens or windows found
           </div>
         ) : (
-          <div className="grid grid-cols-2 gap-3 max-h-[400px] overflow-y-auto">
-            {sources.map((source) => (
-              <button
-                key={source.id}
-                onClick={() => handleSelect(source.id)}
-                className="group flex flex-col rounded-lg border border-border bg-card p-2 hover:border-primary hover:bg-accent transition-colors text-left"
-              >
-                <div className="relative aspect-video w-full rounded bg-muted overflow-hidden">
-                  {source.thumbnail ? (
-                    <img
-                      src={source.thumbnail}
-                      alt={source.name}
-                      className="w-full h-full object-contain"
-                    />
-                  ) : (
-                    <div className="flex items-center justify-center h-full">
-                      <Monitor className="h-8 w-8 text-muted-foreground" />
-                    </div>
-                  )}
+          <div className="max-h-[400px] overflow-y-auto space-y-4">
+            {sources!.displays.length > 0 && (
+              <div>
+                <h3 className="text-sm font-medium text-muted-foreground mb-2">Displays</h3>
+                <div className="grid grid-cols-2 gap-3">
+                  {sources!.displays.map((display) => (
+                    <button
+                      key={display.id}
+                      onClick={() => handleSelectDisplay(display.id)}
+                      className="group flex flex-col rounded-lg border border-border bg-card p-3 hover:border-primary hover:bg-accent transition-colors text-left"
+                    >
+                      <div className="flex items-center gap-3">
+                        <Monitor className="h-6 w-6 text-muted-foreground shrink-0" />
+                        <div className="min-w-0">
+                          <div className="text-sm font-medium truncate">{display.name}</div>
+                          <div className="text-xs text-muted-foreground">
+                            {display.width}x{display.height}{display.primary ? " (Primary)" : ""}
+                          </div>
+                        </div>
+                      </div>
+                    </button>
+                  ))}
                 </div>
-                <span className="mt-2 text-xs font-medium truncate w-full">
-                  {source.name}
-                </span>
-              </button>
-            ))}
+              </div>
+            )}
+            {sources!.windows.length > 0 && (
+              <div>
+                <h3 className="text-sm font-medium text-muted-foreground mb-2">Windows</h3>
+                <div className="grid grid-cols-2 gap-3">
+                  {sources!.windows.map((win) => (
+                    <button
+                      key={win.hwnd}
+                      onClick={() => handleSelectWindow(win.hwnd, win.pid)}
+                      className="group flex flex-col rounded-lg border border-border bg-card p-3 hover:border-primary hover:bg-accent transition-colors text-left"
+                    >
+                      <div className="flex items-center gap-3">
+                        <AppWindow className="h-6 w-6 text-muted-foreground shrink-0" />
+                        <div className="min-w-0">
+                          <div className="text-sm font-medium truncate">{win.title}</div>
+                          <div className="text-xs text-muted-foreground truncate">{win.exe}</div>
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </DialogContent>

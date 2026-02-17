@@ -9,15 +9,53 @@ declare global {
     onMaximizedChange: (callback: (maximized: boolean) => void) => () => void;
   }
 
-  interface ScreenSource {
-    id: string;
+  interface WindowSource {
+    hwnd: number;
+    title: string;
+    pid: number;
+    exe: string;
+  }
+
+  interface DisplaySource {
+    id: number;
     name: string;
-    thumbnail: string;
-    display_id: string;
+    width: number;
+    height: number;
+    primary: boolean;
+  }
+
+  interface ScreenSources {
+    windows: WindowSource[];
+    displays: DisplaySource[];
+  }
+
+  interface VideoPacketData {
+    data: Uint8Array;
+    timestampUs: number;
+    keyframe: boolean;
+  }
+
+  interface AudioPacketData {
+    data: Uint8Array;
+    timestampUs: number;
+    samples: number;
   }
 
   interface ScreenAPI {
-    getSources: () => Promise<ScreenSource[]>;
+    getSources: () => Promise<ScreenSources>;
+    start: (options: {
+      targetType: string;
+      targetId: number;
+      fps: number;
+      bitrate: number;
+      cursor?: boolean;
+      audioPid?: number;
+    }) => Promise<void>;
+    stop: () => void;
+    onVideoPacket: (cb: (packet: VideoPacketData) => void) => () => void;
+    onAudioPacket: (cb: (packet: AudioPacketData) => void) => () => void;
+    onError: (cb: (message: string) => void) => () => void;
+    onStopped: (cb: () => void) => () => void;
   }
 
   interface UpdaterStatus {

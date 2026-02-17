@@ -7,7 +7,14 @@ import {
   type RemoteTrackPublication,
   type RemoteTrack,
 } from "livekit-client";
-import { ScreenEncoder, ScreenDecoder, SCREEN_DATA_TOPIC, type ScreenEncoderConfig } from "./screen-codec";
+import {
+  ScreenDecoder,
+  SCREEN_DATA_TOPIC,
+  chunkPacket,
+  serializeConfig,
+  serializeFrame,
+  parseSPSResolution,
+} from "./screen-codec";
 
 export type SpeakingChangeCallback = (speakingUserIds: Set<string>) => void;
 export type ScreenTrackCallback = (
@@ -33,8 +40,9 @@ export class LiveKitManager {
   private selectedOutputDeviceId: string | null = null;
   private userVolumes = new Map<string, number>();
 
-  // Custom screen share encoding (WebCodecs + DataChannel)
-  private screenEncoder: ScreenEncoder | null = null;
+  // Custom screen share via buttercap H.264 + DataChannel
+  private configSent = false;
+  private lastConfigKey = "";
   private screenDecoders = new Map<string, ScreenDecoder>();
   private screenAudioPublication: LocalTrackPublication | null = null;
 
@@ -86,9 +94,9 @@ export class LiveKitManager {
     }
     this.attachedAudioElements.clear();
 
-    // Clean up screen share encoder/decoders/audio
-    this.screenEncoder?.stop();
-    this.screenEncoder = null;
+    // Clean up screen share state/decoders/audio
+    this.configSent = false;
+    this.lastConfigKey = "";
     this.screenAudioPublication = null;
     for (const decoder of this.screenDecoders.values()) {
       decoder.stop();
@@ -103,29 +111,44 @@ export class LiveKitManager {
     this.lastSpokeAt.clear();
   }
 
-  // --- Custom screen share via WebCodecs + DataChannel ---
+  // --- Custom screen share via buttercap H.264 + DataChannel ---
 
-  async publishScreenEncoded(
-    track: MediaStreamTrack,
-    config: ScreenEncoderConfig,
-  ): Promise<void> {
-    if (!this.room) throw new Error("Not connected to a room");
+  sendScreenPacket(data: Uint8Array, timestampUs: number, keyframe: boolean): void {
+    if (!this.room) return;
 
-    this.screenEncoder = new ScreenEncoder((chunks) => {
-      for (const chunk of chunks) {
-        this.room?.localParticipant.publishData(chunk, {
-          reliable: true,
-          topic: SCREEN_DATA_TOPIC,
-        });
+    // On keyframes, parse SPS and send config if resolution/codec changed (handles window resize)
+    if (keyframe) {
+      const res = parseSPSResolution(data);
+      if (res) {
+        const configKey = `${res.width}x${res.height}:${res.codec}`;
+        if (!this.configSent || configKey !== this.lastConfigKey) {
+          const configPacket = serializeConfig(res.width, res.height, res.codec);
+          for (const chunk of chunkPacket(configPacket)) {
+            this.room.localParticipant.publishData(chunk, {
+              reliable: true,
+              topic: SCREEN_DATA_TOPIC,
+            });
+          }
+          this.configSent = true;
+          this.lastConfigKey = configKey;
+          console.log("[screen] Config sent:", res.width, "x", res.height, res.codec);
+        }
       }
-    });
+    }
 
-    await this.screenEncoder.start(track, config);
+    // Serialize and chunk the H.264 frame
+    const framePacket = serializeFrame(keyframe, timestampUs, 0, data);
+    for (const chunk of chunkPacket(framePacket)) {
+      this.room.localParticipant.publishData(chunk, {
+        reliable: true,
+        topic: SCREEN_DATA_TOPIC,
+      });
+    }
   }
 
-  stopScreenEncoded(): void {
-    this.screenEncoder?.stop();
-    this.screenEncoder = null;
+  stopScreenSending(): void {
+    this.configSent = false;
+    this.lastConfigKey = "";
   }
 
   async publishScreenAudio(track: MediaStreamTrack): Promise<void> {

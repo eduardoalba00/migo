@@ -1,18 +1,19 @@
-import { app, shell, BrowserWindow, ipcMain, desktopCapturer } from "electron";
+import { app, shell, BrowserWindow, ipcMain } from "electron";
 import { join } from "path";
 import { is } from "@electron-toolkit/utils";
 import electronUpdater from "electron-updater";
 const { autoUpdater } = electronUpdater;
 
-// Enable hardware-accelerated video encoding/decoding for WebRTC
-app.commandLine.appendSwitch("enable-features", "WebRtcHWH264Encoding,WebRtcHWVP9Encoding,PlatformHEVCEncoderSupport");
+// Keep GPU rasterization + video decode flags for the receiver
 app.commandLine.appendSwitch("enable-gpu-rasterization");
 app.commandLine.appendSwitch("enable-accelerated-video-decode");
-app.commandLine.appendSwitch("enable-accelerated-video-encode");
 
 if (process.env.MIGO_INSTANCE) {
   app.setPath("userData", app.getPath("userData") + "-" + process.env.MIGO_INSTANCE);
 }
+
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const buttercap = require("buttercap");
 
 function createWindow(): BrowserWindow {
   const mainWindow = new BrowserWindow({
@@ -59,18 +60,103 @@ function createWindow(): BrowserWindow {
     mainWindow.webContents.send("window:maximized-change", false);
   });
 
-  // IPC handler for screen capture sources
-  ipcMain.handle("screen:getSources", async () => {
-    const sources = await desktopCapturer.getSources({
-      types: ["screen", "window"],
-      thumbnailSize: { width: 320, height: 180 },
-    });
-    return sources.map((source) => ({
-      id: source.id,
-      name: source.name,
-      thumbnail: source.thumbnail.toDataURL(),
-      display_id: source.display_id,
+  // --- Screen capture via buttercap ---
+  let captureSession: any = null;
+
+  // System executables to hide from the screen share picker
+  const HIDDEN_EXES = new Set([
+    "textinputhost.exe",
+    "applicationframehost.exe",
+    "searchhost.exe",
+    "startmenuexperiencehost.exe",
+    "shellexperiencehost.exe",
+    "lockapp.exe",
+    "systemsettings.exe",
+  ]);
+
+  ipcMain.handle("screen:getSources", () => ({
+    windows: buttercap.listWindows().filter((w: any) => {
+      // Hide system windows and our own Electron windows
+      if (HIDDEN_EXES.has(w.exe.toLowerCase())) return false;
+      if (w.pid === process.pid) return false;
+      return true;
+    }),
+    displays: buttercap.listDisplays(),
+  }));
+
+  ipcMain.handle("screen:start", (_event, options) => {
+    if (captureSession) {
+      captureSession.stop();
+      captureSession = null;
+    }
+
+    // Per-process audio only works for processes with active audio sessions;
+    // fall back to system audio for display capture, no audio for window capture for now.
+    const audioMode = options.targetType === "display" ? "system" : "none";
+
+    console.log("[buttercap] createSession:", JSON.stringify({
+      target: { type: options.targetType, id: options.targetId },
+      fps: options.fps, bitrate: options.bitrate, audioMode,
     }));
+
+    // Log window info for debugging
+    if (options.targetType === "window") {
+      const wins = buttercap.listWindows();
+      const match = wins.find((w: any) => w.hwnd === options.targetId);
+      console.log("[buttercap] target window:", match ? JSON.stringify(match) : "NOT FOUND");
+    }
+
+    captureSession = buttercap.createSession({
+      target: { type: options.targetType, id: options.targetId },
+      video: {
+        fps: options.fps,
+        codec: "h264",
+        preferHardware: true,
+        bitrate: options.bitrate,
+      },
+      cursor: options.cursor ?? true,
+      audio: { mode: audioMode },
+    });
+
+    captureSession.on("video-packet", (packet: any) => {
+      if (!mainWindow.isDestroyed()) {
+        mainWindow.webContents.send("screen:video-packet", {
+          data: new Uint8Array(packet.data),
+          timestampUs: packet.timestampUs,
+          keyframe: packet.keyframe,
+        });
+      }
+    });
+
+    captureSession.on("audio-packet", (packet: any) => {
+      if (!mainWindow.isDestroyed()) {
+        mainWindow.webContents.send("screen:audio-packet", {
+          data: new Uint8Array(packet.data),
+          timestampUs: packet.timestampUs,
+          samples: packet.samples,
+        });
+      }
+    });
+
+    captureSession.on("error", (err: Error) => {
+      if (!mainWindow.isDestroyed()) {
+        mainWindow.webContents.send("screen:error", err.message);
+      }
+    });
+
+    captureSession.on("stopped", () => {
+      if (!mainWindow.isDestroyed()) {
+        mainWindow.webContents.send("screen:stopped");
+      }
+      captureSession = null;
+    });
+
+    captureSession.start();
+  });
+
+  ipcMain.on("screen:stop", () => {
+    captureSession?.stop();
+    captureSession = null;
   });
 
   if (is.dev && process.env["ELECTRON_RENDERER_URL"]) {
