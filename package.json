@@ -15,9 +15,6 @@
     "prod:server:down": "docker compose -f docker-compose.prod.yml --env-file .env.prod down",
     "ship": "git checkout main && git merge dev && git push origin main && git checkout dev"
   },
-  "dependencies": {
-    "electron": "^40.2.1"
-  },
   "devDependencies": {
     "@types/node": "^25.2.3",
     "cross-env": "^10.1.0"
