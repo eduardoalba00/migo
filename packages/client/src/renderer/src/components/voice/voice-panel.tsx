@@ -1,4 +1,4 @@
-import { Mic, MicOff, Headphones, HeadphoneOff, PhoneOff, Monitor, MonitorOff } from "lucide-react";
+import { Mic, MicOff, Headphones, HeadphoneOff, PhoneOff, Monitor, MonitorOff, AudioLines } from "lucide-react";
 import { useVoiceStore } from "@/stores/voice";
 import { useAuthStore } from "@/stores/auth";
 import { cn } from "@/lib/utils";
@@ -13,6 +13,9 @@ export function VoicePanel() {
   const userId = useAuthStore((s) => s.user?.id);
   const isSpeaking = userId ? speakingUsers.has(userId) : false;
   const isScreenSharing = useVoiceStore((s) => s.isScreenSharing);
+  const noiseSuppression = useVoiceStore((s) => s.noiseSuppression);
+  const noiseSuppressionMode = useVoiceStore((s) => s.noiseSuppressionMode);
+  const toggleNoiseSuppression = useVoiceStore((s) => s.toggleNoiseSuppression);
   const leaveChannel = useVoiceStore((s) => s.leaveChannel);
   const toggleMute = useVoiceStore((s) => s.toggleMute);
   const toggleDeafen = useVoiceStore((s) => s.toggleDeafen);
@@ -65,6 +68,23 @@ export function VoicePanel() {
           title={isScreenSharing ? "Stop Sharing" : "Share Screen"}
         >
           {isScreenSharing ? <MonitorOff className="h-4 w-4" /> : <Monitor className="h-4 w-4" />}
+        </button>
+        <button
+          onClick={toggleNoiseSuppression}
+          disabled={isConnecting}
+          className={cn(
+            "p-2 rounded-md hover:bg-muted transition-colors",
+            noiseSuppression && "text-green-500 bg-green-500/10",
+          )}
+          title={
+            noiseSuppression
+              ? noiseSuppressionMode === "krisp"
+                ? "Noise Suppression (Enhanced)"
+                : "Noise Suppression (Standard)"
+              : "Noise Suppression Off"
+          }
+        >
+          <AudioLines className="h-4 w-4" />
         </button>
         <button
           onClick={leaveChannel}

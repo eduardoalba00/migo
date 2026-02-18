@@ -20,13 +20,18 @@ pnpm build:client        # electron-vite build
 # Database (Drizzle ORM + PostgreSQL)
 pnpm db:generate         # Generate migration files from schema changes
 pnpm db:migrate          # Apply migrations (tsx src/db/migrate.ts)
+
+# Native addon (Windows only)
+cd packages/client && npx node-gyp rebuild   # Compile WASAPI audio capture addon
+node src/native/test-capture.cjs             # Run native addon tests (Node.js)
+npx electron src/native/test-capture-electron.cjs  # Run native addon tests (Electron)
 ```
 
-No test framework is configured yet.
+No test framework is configured for server/shared. Client has vitest (`pnpm --filter @migo/client test`).
 
 ## Versioning & Release Pipeline
 
-Everything is in a single workflow: `.github/workflows/version.yml`. Every push to `main` (except `chore(version):` commits) runs three jobs in sequence:
+Everything is in `.github/workflows/version.yml`. Every push to `main` (except `chore(version):` commits) runs three jobs in sequence:
 
 1. **bump** — Determines bump type from the commit message (`feat!:` → major, `feat:` → minor, else → patch). Bumps version in all package.json files + `PROTOCOL_VERSION`, commits as `chore(version): vX.Y.Z`, tags, and pushes.
 2. **docker** — Builds the Dockerfile and pushes to GHCR as `ghcr.io/eduardoalba00/migo-server:<version>` and `:latest`.
@@ -34,7 +39,7 @@ Everything is in a single workflow: `.github/workflows/version.yml`. Every push 
 
 To deploy: `pnpm ship` (merges `dev` → `main`, pushes, switches back to `dev`).
 
-**Important:** All three jobs use `GITHUB_TOKEN` and live in a single workflow because `GITHUB_TOKEN` cannot trigger other workflows.
+**Important:** All three jobs use `GITHUB_TOKEN` and live in a single workflow because `GITHUB_TOKEN` cannot trigger other workflows. macOS build is currently disabled (Windows-only releases).
 
 ### Minimum client version
 
@@ -54,7 +59,7 @@ Production runs via `docker-compose.prod.yml` with three services:
 
 Voice/video uses **LiveKit Cloud** (not self-hosted). Create a free project at https://cloud.livekit.io and set `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` in `.env.prod`.
 
-Environment variables are in `.env.prod` (see `.env.prod.example`): `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`.
+Environment variables are in `.env.prod` (see `.env.example`): `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`.
 
 CI/CD: GitHub Actions builds the GHCR image on push to `main`. Watchtower pulls the latest image automatically — no manual deploy step.
 
@@ -65,7 +70,7 @@ Start: `docker compose -f docker-compose.prod.yml --env-file .env.prod up -d`
 **pnpm monorepo** with three packages:
 
 - **`@migo/server`** — Fastify 5 REST API + WebSocket server. PostgreSQL via Drizzle ORM + postgres.js. Voice + screen sharing via LiveKit. Auth via argon2 + JWT (jose).
-- **`@migo/client`** — Electron 40 desktop app. React 19 renderer built with electron-vite. State management with Zustand. Styling with Tailwind CSS 4 (OKLCH color tokens). UI primitives from Radix UI. Screen sharing via LiveKit SDK's WebRTC pipeline (VP9 encoding, Chromium's built-in FEC/NACK/congestion control).
+- **`@migo/client`** — Electron 40 desktop app. React 19 renderer built with electron-vite. State management with Zustand. Styling with Tailwind CSS 4 (OKLCH color tokens). UI primitives from Radix UI. Screen sharing via LiveKit SDK's WebRTC pipeline (VP9 encoding, Chromium's built-in FEC/NACK/congestion control). Screen share audio via WASAPI process loopback (Windows native addon).
 - **`@migo/shared`** — Zod schemas, TypeScript types, WebSocket protocol definitions, and API route constants shared between client and server.
 
 ### Shared package resolution
@@ -76,29 +81,39 @@ The shared package uses a custom export condition `@migo/source` so dev tools (t
 
 | Directory | Purpose |
 |-----------|---------|
-| `db/schema/` | Drizzle table definitions (users, servers, server_members, categories, channels, messages, invites) |
-| `routes/` | Fastify route handlers (auth, servers, channels, messages, invites) |
+| `db/schema/` | Drizzle table definitions (users, servers, server_members, categories, channels, messages, invites, reactions, attachments, roles, dm-channels, bans, read-states) |
+| `routes/` | Fastify route handlers (auth, servers, channels, messages, invites, uploads, roles, dms, search) |
 | `services/` | Business logic (auth token management, server membership checks) |
 | `middleware/` | Bearer token auth extraction |
 | `ws/` | WebSocket protocol: connection registry, opcode handler, EventEmitter-based pubsub |
 | `voice/` | LiveKit token service, voice state tracking |
 
-Config is env-based (`config.ts`): `PORT` (default 3000), `HOST`, `DATABASE_URL`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`. Defaults work for local dev (auto-generated JWT secrets, `postgres://localhost:5432/migo`). LiveKit dev server: `docker run --rm -p 7890:7880 -p 7881:7881 -p 7882:7882/udp livekit/livekit-server --dev --bind 0.0.0.0`.
+Config is env-based (`config.ts`): `PORT` (default 3000), `HOST`, `DATABASE_URL`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`. Defaults work for local dev (auto-generated JWT secrets, `postgres://localhost:5432/migo`).
 
 ### Client structure (`packages/client/src/renderer/src/`)
 
 | Directory | Purpose |
 |-----------|---------|
-| `stores/` | Zustand stores (auth, workspace, servers, channels, messages, voice, ws) |
+| `stores/` | Zustand stores (auth, workspace, servers, channels, messages, voice, ws, members, dms) |
 | `lib/` | HTTP client (`api.ts`), WebSocket manager (`ws.ts`), LiveKit client (`livekit.ts`) |
 | `components/` | React components organized by domain (auth, servers, channels, messages, voice, layout, ui) |
 | `pages/` | Top-level views: auth, workspace picker, app shell |
 
 Path alias: `@/*` maps to `src/renderer/src/*` in the client.
 
+### Native addon (`packages/client/src/native/`)
+
+WASAPI process-specific audio loopback capture (Windows 10 2004+). Built with node-addon-api (N-API). Compiled via `node-gyp rebuild` in `postinstall`. The addon is Windows-only — `binding.gyp` uses `"type": "none"` on other platforms.
+
+- `audio-capture.cpp` — C++ addon using `ActivateAudioInterfaceAsync` with `AUDIOCLIENT_PROCESS_LOOPBACK_PARAMS`
+- Window share → `INCLUDE_TARGET_PROCESS_TREE` (captures only that app's audio)
+- Display share → `EXCLUDE_TARGET_PROCESS_TREE` with Migo's PID (captures system audio minus voice chat)
+- Production packaging: `extraResources` in electron-builder.yml → loaded via `process.resourcesPath` at runtime
+- `postinstall: "node-gyp rebuild || true"` — non-fatal so Docker/Linux builds aren't blocked
+
 ### WebSocket protocol
 
-Custom binary-style JSON protocol with opcodes: DISPATCH (0), IDENTIFY (1), HEARTBEAT (2), HEARTBEAT_ACK (3), READY (4), VOICE_STATE_UPDATE (5), VOICE_SIGNAL (6), TYPING_START (7). Dispatch events include MESSAGE_CREATE/UPDATE/DELETE, CHANNEL_CREATE/UPDATE/DELETE, MEMBER_JOIN/LEAVE, VOICE_STATE_UPDATE, TYPING_START, REACTION_ADD/REMOVE, PRESENCE_UPDATE, SCREEN_SHARE_START/STOP. Types defined in `@migo/shared`.
+Custom JSON protocol with opcodes: DISPATCH (0), IDENTIFY (1), HEARTBEAT (2), HEARTBEAT_ACK (3), READY (4), VOICE_STATE_UPDATE (5), VOICE_SIGNAL (6), TYPING_START (7). Dispatch events include MESSAGE_CREATE/UPDATE/DELETE, CHANNEL_CREATE/UPDATE/DELETE, MEMBER_JOIN/LEAVE, VOICE_STATE_UPDATE, TYPING_START, REACTION_ADD/REMOVE, PRESENCE_UPDATE, SCREEN_SHARE_START/STOP, DM_MESSAGE_CREATE, DM_CHANNEL_CREATE. Types defined in `@migo/shared`.
 
 ### Auth flow
 
@@ -112,6 +127,7 @@ Before every commit, check for breaking changes:
 - **API contract changed?** If request/response shapes changed, ensure client and server agree. New required fields break older clients.
 - **WebSocket protocol changed?** Changes to opcodes or dispatch event payloads require bumping `PROTOCOL_VERSION` and `MIN_CLIENT_VERSION`.
 - **Database schema changed?** Run `pnpm db:generate` to create migration files before committing.
+- **Native addon changed?** Run `npx node-gyp rebuild` then `node src/native/test-capture.cjs` in `packages/client` to verify.
 
 ## Key Conventions
 
@@ -121,3 +137,5 @@ Before every commit, check for breaking changes:
 - API route paths are defined as constants in `@migo/shared` and shared across packages
 - Theme uses OKLCH color space with CSS custom properties, light/dark via next-themes
 - Electron uses frameless window with custom titlebar; IPC bridge exposes window controls (minimize/maximize/close)
+- Screen share video: LiveKit SDK `setScreenShareEnabled` with VP9, 60fps, `contentHint: "motion"`
+- Screen share audio: WASAPI → IPC → AudioWorklet → MediaStreamTrack → LiveKit `ScreenShareAudio` track

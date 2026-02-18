@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { WsOpcode } from "@migo/shared";
 import type { VoiceState, VoiceChannelUser } from "@migo/shared";
-import { livekitManager } from "@/lib/livekit";
+import { livekitManager, type NoiseSuppressionMode } from "@/lib/livekit";
 import { wsManager } from "@/lib/ws";
 import {
   playJoinSound,
@@ -22,6 +22,11 @@ interface VoiceStoreState {
   isConnecting: boolean;
   speakingUsers: Set<string>;
   userVolumes: Record<string, number>;
+
+  // Noise suppression
+  noiseSuppression: boolean;
+  noiseSuppressionMode: NoiseSuppressionMode;
+  toggleNoiseSuppression: () => Promise<void>;
 
   // Screen sharing
   isScreenSharing: boolean;
@@ -89,10 +94,27 @@ export const useVoiceStore = create<VoiceStoreState>()((set, get) => ({
   isConnecting: false,
   speakingUsers: new Set<string>(),
   userVolumes: {},
+  noiseSuppression: localStorage.getItem("migo-noise-suppression") === "true",
+  noiseSuppressionMode: "off" as NoiseSuppressionMode,
   isScreenSharing: false,
   screenShareTracks: {},
   focusedScreenShareUserId: null,
   showScreenSharePicker: false,
+
+  toggleNoiseSuppression: async () => {
+    const newValue = !get().noiseSuppression;
+    set({ noiseSuppression: newValue });
+    localStorage.setItem("migo-noise-suppression", String(newValue));
+
+    if (get().currentChannelId) {
+      try {
+        const mode = await livekitManager.setNoiseSuppression(newValue);
+        set({ noiseSuppressionMode: mode });
+      } catch (err) {
+        console.error("Failed to toggle noise suppression:", err);
+      }
+    }
+  },
 
   joinChannel: async (channelId, serverId) => {
     const { currentChannelId } = get();
@@ -159,6 +181,14 @@ export const useVoiceStore = create<VoiceStoreState>()((set, get) => ({
       if (savedInput) livekitManager.setInputDevice(savedInput);
       if (savedOutput) livekitManager.setOutputDevice(savedOutput);
 
+      // 6. Apply noise suppression if saved preference is enabled
+      if (get().noiseSuppression) {
+        try {
+          const mode = await livekitManager.setNoiseSuppression(true);
+          set({ noiseSuppressionMode: mode });
+        } catch {}
+      }
+
       set({ isConnecting: false });
       playJoinSound();
     } catch (err) {
@@ -214,6 +244,7 @@ export const useVoiceStore = create<VoiceStoreState>()((set, get) => ({
       isDeafened: false,
       isConnecting: false,
       speakingUsers: new Set(),
+      noiseSuppressionMode: "off" as NoiseSuppressionMode,
       isScreenSharing: false,
       screenShareTracks: {},
       focusedScreenShareUserId: null,

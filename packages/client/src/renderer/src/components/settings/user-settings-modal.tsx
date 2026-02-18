@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { X, User, Lock, Palette, Volume2 } from "lucide-react";
 import { useAuthStore } from "@/stores/auth";
+import { useVoiceStore } from "@/stores/voice";
 import { api, resolveUploadUrl } from "@/lib/api";
 import { livekitManager } from "@/lib/livekit";
 import { AUTH_ROUTES, UPLOAD_ROUTES } from "@migo/shared";
@@ -234,6 +235,9 @@ function VoiceTab() {
   const [inputDevice, setInputDevice] = useState(() => localStorage.getItem("migo-input-device") || "");
   const [outputDevice, setOutputDevice] = useState(() => localStorage.getItem("migo-output-device") || "");
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
+  const noiseSuppression = useVoiceStore((s) => s.noiseSuppression);
+  const noiseSuppressionMode = useVoiceStore((s) => s.noiseSuppressionMode);
+  const toggleNoiseSuppression = useVoiceStore((s) => s.toggleNoiseSuppression);
 
   useEffect(() => {
     navigator.mediaDevices.enumerateDevices().then(setDevices).catch(() => {});
@@ -253,6 +257,13 @@ function VoiceTab() {
 
   const inputs = devices.filter((d) => d.kind === "audioinput");
   const outputs = devices.filter((d) => d.kind === "audiooutput");
+
+  const modeLabel =
+    noiseSuppressionMode === "krisp"
+      ? "Enhanced (Krisp)"
+      : noiseSuppressionMode === "browser"
+        ? "Standard (Browser)"
+        : "Off";
 
   return (
     <div className="space-y-6">
@@ -284,6 +295,33 @@ function VoiceTab() {
             ))}
           </select>
         </div>
+      </div>
+      <div className="space-y-2">
+        <div className="flex items-center justify-between max-w-sm">
+          <div>
+            <label className="text-sm font-medium">Noise Suppression</label>
+            <p className="text-xs text-muted-foreground">
+              Filter background noise from your microphone
+            </p>
+          </div>
+          <button
+            onClick={toggleNoiseSuppression}
+            className={`relative w-10 h-5 rounded-full transition-colors ${
+              noiseSuppression ? "bg-primary" : "bg-muted-foreground/30"
+            }`}
+          >
+            <span
+              className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
+                noiseSuppression ? "translate-x-5" : ""
+              }`}
+            />
+          </button>
+        </div>
+        {noiseSuppression && noiseSuppressionMode !== "off" && (
+          <p className="text-xs text-muted-foreground">
+            Active: {modeLabel}
+          </p>
+        )}
       </div>
     </div>
   );

@@ -61,8 +61,11 @@ export type ScreenTrackCallback = (
 ) => void;
 
 // Discord-style VAD thresholds
-const SPEAKING_THRESHOLD = 15; // frequency bin average (0-255 range)
-const SILENCE_DELAY_MS = 200;  // hold indicator briefly after silence
+const SPEAKING_THRESHOLD = 15;          // frequency bin average (0-255 range)
+const SPEAKING_THRESHOLD_NS_LOCAL = 30; // higher threshold for local mic when browser NS is on
+                                        // (Chromium applies NS in the WebRTC send path, not on
+                                        //  the MediaStreamAudioSourceNode the analyser reads)
+const SILENCE_DELAY_MS = 200;           // hold indicator briefly after silence
 
 interface AudioAnalysis {
   analyser: AnalyserNode;
@@ -70,12 +73,18 @@ interface AudioAnalysis {
   dataArray: Uint8Array;
 }
 
+export type NoiseSuppressionMode = "krisp" | "browser" | "off";
+
 export class LiveKitManager {
   private room: Room | null = null;
   private speakingCallback: SpeakingChangeCallback | null = null;
   private screenTrackCallback: ScreenTrackCallback | null = null;
   private selectedOutputDeviceId: string | null = null;
   private userVolumes = new Map<string, number>();
+
+  // Noise suppression state
+  private noiseSuppressionEnabled = false;
+  private krispProcessor: any = null;
 
   // VAD state
   private audioContext: AudioContext | null = null;
@@ -324,6 +333,69 @@ export class LiveKitManager {
     }
   }
 
+  async setNoiseSuppression(enabled: boolean): Promise<NoiseSuppressionMode> {
+    this.noiseSuppressionEnabled = enabled;
+
+    if (!this.room) return "off";
+
+    const localPub = this.room.localParticipant.getTrackPublication(Track.Source.Microphone);
+
+    if (enabled) {
+      // Try Krisp first
+      try {
+        const { KrispNoiseFilter, isKrispNoiseFilterSupported } = await import(
+          "@livekit/krisp-noise-filter"
+        );
+        if (isKrispNoiseFilterSupported()) {
+          this.krispProcessor = KrispNoiseFilter();
+          const localTrack = localPub?.track;
+          if (localTrack) {
+            await localTrack.setProcessor(this.krispProcessor);
+            this.rebuildLocalMicAnalyser();
+            return "krisp";
+          }
+        }
+      } catch {
+        // Krisp not available, fall through to browser
+      }
+
+      // Fallback: browser-native noise suppression via track restart
+      this.krispProcessor = null;
+      await this.room.localParticipant.setMicrophoneEnabled(false);
+      await this.room.localParticipant.setMicrophoneEnabled(true, {
+        noiseSuppression: true,
+        echoCancellation: true,
+        autoGainControl: true,
+      });
+      this.rebuildLocalMicAnalyser();
+      return "browser";
+    } else {
+      // Disable: stop processor if Krisp was active
+      if (this.krispProcessor && localPub?.track) {
+        await localPub.track.stopProcessor();
+        this.krispProcessor = null;
+        this.rebuildLocalMicAnalyser();
+      } else {
+        // Restart mic without constraints
+        await this.room.localParticipant.setMicrophoneEnabled(false);
+        await this.room.localParticipant.setMicrophoneEnabled(true);
+        this.rebuildLocalMicAnalyser();
+      }
+      return "off";
+    }
+  }
+
+  get isNoiseSuppressionEnabled(): boolean {
+    return this.noiseSuppressionEnabled;
+  }
+
+  private rebuildLocalMicAnalyser(): void {
+    if (!this.room) return;
+    const identity = this.room.localParticipant.identity;
+    this.removeAnalyser(identity);
+    this.setupLocalMicAnalyser();
+  }
+
   static async getAudioDevices(): Promise<{ inputs: MediaDeviceInfo[]; outputs: MediaDeviceInfo[] }> {
     const devices = await navigator.mediaDevices.enumerateDevices();
     return {
@@ -372,7 +444,12 @@ export class LiveKitManager {
     if (!this.room || !this.audioContext) return;
 
     const localPub = this.room.localParticipant.getTrackPublication(Track.Source.Microphone);
-    const localTrack = localPub?.track?.mediaStreamTrack;
+    // When Krisp is active, the sender's track is the processed output — use it
+    // so the local VAD matches what remote participants actually hear.
+    const senderTrack = this.krispProcessor
+      ? (localPub?.track as any)?.sender?.track as MediaStreamTrack | undefined
+      : undefined;
+    const localTrack = senderTrack ?? localPub?.track?.mediaStreamTrack;
     if (localTrack) {
       this.createAnalyser(this.room.localParticipant.identity, localTrack);
     }
@@ -386,6 +463,13 @@ export class LiveKitManager {
       const now = Date.now();
       let changed = false;
 
+      // Use a stricter threshold for the local mic when browser NS is active,
+      // because Chromium applies noise suppression in the WebRTC encoder path
+      // but the AnalyserNode reads the raw pre-processing audio.
+      const localIdentity = this.room?.localParticipant.identity;
+      const useNsThreshold =
+        this.noiseSuppressionEnabled && !this.krispProcessor;
+
       for (const [identity, analysis] of this.analysers) {
         analysis.analyser.getByteFrequencyData(analysis.dataArray);
 
@@ -395,7 +479,11 @@ export class LiveKitManager {
           sum += analysis.dataArray[i];
         }
         const avg = sum / analysis.dataArray.length;
-        const loud = avg > SPEAKING_THRESHOLD;
+        const threshold =
+          useNsThreshold && identity === localIdentity
+            ? SPEAKING_THRESHOLD_NS_LOCAL
+            : SPEAKING_THRESHOLD;
+        const loud = avg > threshold;
 
         if (loud) {
           this.lastSpokeAt.set(identity, now);
