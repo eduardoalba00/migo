@@ -105,6 +105,9 @@ importers:
       lucide-react:
         specifier: ^0.525.0
         version: 0.525.0(react@19.2.4)
+      node-addon-api:
+        specifier: ^8.3.1
+        version: 8.5.0
       react:
         specifier: ^19.1.0
         version: 19.2.4

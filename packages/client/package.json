@@ -8,7 +8,8 @@
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
-    "rebuild": "electron-builder install-app-deps",
+    "rebuild": "node-gyp rebuild",
+    "postinstall": "node-gyp rebuild",
     "test": "vitest run",
     "test:watch": "vitest"
   },
@@ -35,6 +36,7 @@
   },
   "devDependencies": {
     "@electron-toolkit/preload": "^3.0.1",
+    "node-addon-api": "^8.3.1",
     "@electron-toolkit/utils": "^4.0.0",
     "@tailwindcss/vite": "^4.1.8",
     "@types/react": "^19.1.8",

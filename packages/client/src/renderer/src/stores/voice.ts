@@ -404,12 +404,19 @@ export const useVoiceStore = create<VoiceStoreState>()((set, get) => ({
     try {
       // Pre-select the source in the main process so that when
       // getDisplayMedia() is called, the handler provides the right source.
-      await window.screenAPI.selectSource(target.type, target.id);
+      // Returns the desktopCapturer source ID (e.g. "window:12345:0") or null.
+      const sourceId = await window.screenAPI.selectSource(target.type, target.id);
+      if (!sourceId) throw new Error("No source selected");
+
+      // Map picker type to audio capture source type
+      const sourceType: "window" | "screen" =
+        target.type === "window" ? "window" : "screen";
 
       // Use LiveKit SDK's setScreenShareEnabled which calls getDisplayMedia()
       // internally. Chrome's full WebRTC pipeline handles encoding, FEC,
       // congestion control, and NACK (tested at 55fps 1440p).
-      await livekitManager.startScreenShare();
+      // Also starts WASAPI process audio capture if available.
+      await livekitManager.startScreenShare(sourceId, sourceType);
 
       // Notify server so other clients see the screen share icon
       voiceSignal("startScreenShare", {}).catch(() => {});

@@ -22,7 +22,7 @@ declare global {
 
   interface ScreenAPI {
     getSources: () => Promise<ScreenSources>;
-    selectSource: (targetType?: string, targetId?: number) => Promise<boolean>;
+    selectSource: (targetType?: string, targetId?: number) => Promise<string | null>;
   }
 
   interface UpdaterStatus {
@@ -46,9 +46,17 @@ declare global {
     getVersion: () => Promise<string>;
   }
 
+  interface AudioCaptureAPI {
+    isAvailable: () => Promise<boolean>;
+    start: (sourceId: string, sourceType: "window" | "screen") => Promise<boolean>;
+    stop: () => Promise<void>;
+    onData: (callback: (buffer: Float32Array) => void) => () => void;
+  }
+
   interface Window {
     windowAPI: WindowAPI;
     screenAPI: ScreenAPI;
     updaterAPI: UpdaterAPI;
+    audioCaptureAPI: AudioCaptureAPI;
   }
 }
