@@ -12,6 +12,7 @@ files:
   - "build/Release/**/*.node"
 asarUnpack:
   - "build/Release/**/*.node"
+npmRebuild: false
 win:
   executableName: Migo
   target:
