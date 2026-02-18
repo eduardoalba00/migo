@@ -10,7 +10,3 @@ out
 .env.prod
 *uploads/
 *settings.local.json
-
-# Media engine native addon build artifacts
-packages/media-engine/*.node
-packages/media-engine/target/

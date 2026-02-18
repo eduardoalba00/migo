@@ -16,24 +16,8 @@ contextBridge.exposeInMainWorld("windowAPI", windowAPI);
 
 const screenAPI = {
   getSources: () => ipcRenderer.invoke("screen:getSources"),
-  start: (options: any) => ipcRenderer.invoke("screen:start", options),
-  stop: () => ipcRenderer.send("screen:stop"),
-  forceKeyframe: () => ipcRenderer.send("screen:forceKeyframe"),
-  onError: (cb: Function) => {
-    const handler = (_e: any, msg: string) => cb(msg);
-    ipcRenderer.on("screen:error", handler);
-    return () => ipcRenderer.removeListener("screen:error", handler);
-  },
-  onStopped: (cb: Function) => {
-    const handler = () => cb();
-    ipcRenderer.on("screen:stopped", handler);
-    return () => ipcRenderer.removeListener("screen:stopped", handler);
-  },
-  onStats: (cb: Function) => {
-    const handler = (_e: any, stats: any) => cb(stats);
-    ipcRenderer.on("screen:stats", handler);
-    return () => ipcRenderer.removeListener("screen:stats", handler);
-  },
+  selectSource: (targetType?: string, targetId?: number) =>
+    ipcRenderer.invoke("screen:selectSource", targetType, targetId) as Promise<boolean>,
 };
 
 contextBridge.exposeInMainWorld("screenAPI", screenAPI);

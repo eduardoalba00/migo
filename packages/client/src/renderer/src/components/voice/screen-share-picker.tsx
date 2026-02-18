@@ -3,21 +3,11 @@ import { Monitor, AppWindow } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { useVoiceStore } from "@/stores/voice";
 
-export type CapturePreset = "720p30" | "1080p30" | "1080p60" | "1440p60";
-
-const qualityOptions: { value: CapturePreset; label: string }[] = [
-  { value: "720p30", label: "720p 30fps" },
-  { value: "1080p30", label: "1080p 30fps" },
-  { value: "1080p60", label: "1080p 60fps" },
-  { value: "1440p60", label: "1440p 60fps" },
-];
-
 export function ScreenSharePicker() {
   const showPicker = useVoiceStore((s) => s.showScreenSharePicker);
   const startScreenShare = useVoiceStore((s) => s.startScreenShare);
   const [sources, setSources] = useState<ScreenSources | null>(null);
   const [loading, setLoading] = useState(true);
-  const [preset, setPreset] = useState<CapturePreset>("1440p60");
 
   useEffect(() => {
     if (!showPicker) return;
@@ -34,11 +24,11 @@ export function ScreenSharePicker() {
   };
 
   const handleSelectDisplay = (index: number) => {
-    startScreenShare({ type: "display", id: index }, preset);
+    startScreenShare({ type: "display", id: index });
   };
 
-  const handleSelectWindow = (handle: number) => {
-    startScreenShare({ type: "window", id: handle }, preset);
+  const handleSelectWindow = (index: number) => {
+    startScreenShare({ type: "window", id: index });
   };
 
   const hasNoSources = !sources || (sources.displays.length === 0 && sources.windows.length === 0);
@@ -50,20 +40,6 @@ export function ScreenSharePicker() {
           <DialogTitle>Share Your Screen</DialogTitle>
           <DialogDescription>Choose a screen or window to share</DialogDescription>
         </DialogHeader>
-        <div className="flex items-center gap-2">
-          <label className="text-sm font-medium text-muted-foreground">Quality</label>
-          <select
-            value={preset}
-            onChange={(e) => setPreset(e.target.value as CapturePreset)}
-            className="h-8 rounded-md border border-border bg-background px-2 text-sm"
-          >
-            {qualityOptions.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
-        </div>
         {loading ? (
           <div className="flex items-center justify-center py-12 text-muted-foreground">
             Loading sources...
@@ -80,16 +56,15 @@ export function ScreenSharePicker() {
                 <div className="grid grid-cols-2 gap-3">
                   {sources!.displays.map((display) => (
                     <button
-                      key={display.index}
+                      key={display.id}
                       onClick={() => handleSelectDisplay(display.index)}
                       className="group flex flex-col rounded-lg border border-border bg-card p-3 hover:border-primary hover:bg-accent transition-colors text-left"
                     >
                       <div className="flex items-center gap-3">
                         <Monitor className="h-6 w-6 text-muted-foreground shrink-0" />
                         <div className="min-w-0">
-                          <div className="text-sm font-medium truncate">{display.name}</div>
-                          <div className="text-xs text-muted-foreground">
-                            {display.width}x{display.height}{display.index === 0 ? " (Primary)" : ""}
+                          <div className="text-sm font-medium truncate">
+                            {display.name}{display.index === 0 ? " (Primary)" : ""}
                           </div>
                         </div>
                       </div>
@@ -104,15 +79,14 @@ export function ScreenSharePicker() {
                 <div className="grid grid-cols-2 gap-3">
                   {sources!.windows.map((win) => (
                     <button
-                      key={win.handle}
-                      onClick={() => handleSelectWindow(win.handle)}
+                      key={win.id}
+                      onClick={() => handleSelectWindow(win.index)}
                       className="group flex flex-col rounded-lg border border-border bg-card p-3 hover:border-primary hover:bg-accent transition-colors text-left"
                     >
                       <div className="flex items-center gap-3">
                         <AppWindow className="h-6 w-6 text-muted-foreground shrink-0" />
                         <div className="min-w-0">
-                          <div className="text-sm font-medium truncate">{win.title}</div>
-                          <div className="text-xs text-muted-foreground truncate">{win.processName}</div>
+                          <div className="text-sm font-medium truncate">{win.name}</div>
                         </div>
                       </div>
                     </button>

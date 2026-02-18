@@ -1,10 +1,10 @@
-import { app, shell, BrowserWindow, ipcMain } from "electron";
+import { app, shell, BrowserWindow, ipcMain, desktopCapturer } from "electron";
 import { join } from "path";
 import { is } from "@electron-toolkit/utils";
 import electronUpdater from "electron-updater";
 const { autoUpdater } = electronUpdater;
 
-// Keep GPU rasterization + video decode flags for the receiver
+// GPU acceleration for video decode
 app.commandLine.appendSwitch("enable-gpu-rasterization");
 app.commandLine.appendSwitch("enable-accelerated-video-decode");
 
@@ -12,8 +12,16 @@ if (process.env.MIGO_INSTANCE) {
   app.setPath("userData", app.getPath("userData") + "-" + process.env.MIGO_INSTANCE);
 }
 
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const mediaEngine = require("@migo/media-engine");
+// System executables to hide from the screen share picker
+const HIDDEN_PROCESS_NAMES = new Set([
+  "textinputhost.exe",
+  "applicationframehost.exe",
+  "searchhost.exe",
+  "startmenuexperiencehost.exe",
+  "shellexperiencehost.exe",
+  "lockapp.exe",
+  "systemsettings.exe",
+]);
 
 function createWindow(): BrowserWindow {
   const mainWindow = new BrowserWindow({
@@ -41,6 +49,79 @@ function createWindow(): BrowserWindow {
     return { action: "deny" };
   });
 
+  // Enable getDisplayMedia() for screen share via LiveKit SDK.
+  // Store the pending source selection so the handler can provide it.
+  let pendingScreenSource: Electron.DesktopCapturerSource | null = null;
+
+  mainWindow.webContents.session.setDisplayMediaRequestHandler(
+    async (_request, callback) => {
+      if (pendingScreenSource) {
+        callback({ video: pendingScreenSource });
+        pendingScreenSource = null;
+      } else {
+        // Fallback: auto-select primary display
+        const sources = await desktopCapturer.getSources({ types: ["screen"] });
+        callback({ video: sources[0] });
+      }
+    },
+  );
+
+  // Pre-select a source before getDisplayMedia() is called
+  ipcMain.handle("screen:selectSource", async (_event, targetType?: string, targetId?: number) => {
+    const types: Array<"screen" | "window"> =
+      targetType === "window" ? ["window"] : ["screen"];
+    const sources = await desktopCapturer.getSources({
+      types,
+      thumbnailSize: { width: 0, height: 0 },
+    });
+
+    if (targetType === "window") {
+      // Match by source name — desktopCapturer window names are the window titles
+      const allWindows = await desktopCapturer.getSources({
+        types: ["window"],
+        thumbnailSize: { width: 0, height: 0 },
+      });
+      // targetId is the index into our filtered list; find the matching source
+      pendingScreenSource = allWindows[targetId ?? 0] ?? sources[0] ?? null;
+    } else {
+      const idx = targetId ?? 0;
+      pendingScreenSource = sources[idx] ?? sources[0] ?? null;
+    }
+
+    return !!pendingScreenSource;
+  });
+
+  // List available screens and windows for the picker
+  ipcMain.handle("screen:getSources", async () => {
+    const [screenSources, windowSources] = await Promise.all([
+      desktopCapturer.getSources({ types: ["screen"], thumbnailSize: { width: 0, height: 0 } }),
+      desktopCapturer.getSources({ types: ["window"], thumbnailSize: { width: 0, height: 0 } }),
+    ]);
+
+    const displays = screenSources.map((s, i) => ({
+      id: s.id,
+      name: s.name,
+      index: i,
+    }));
+
+    const windows = windowSources
+      .filter((s) => {
+        // Filter out system processes by checking the source name
+        const lower = s.name.toLowerCase();
+        for (const hidden of HIDDEN_PROCESS_NAMES) {
+          if (lower.includes(hidden.replace(".exe", ""))) return false;
+        }
+        return true;
+      })
+      .map((s, i) => ({
+        id: s.id,
+        name: s.name,
+        index: i,
+      }));
+
+    return { displays, windows };
+  });
+
   // IPC handlers for frameless window controls
   ipcMain.on("window:minimize", () => mainWindow.minimize());
   ipcMain.on("window:maximize", () => {
@@ -58,94 +139,6 @@ function createWindow(): BrowserWindow {
   });
   mainWindow.on("unmaximize", () => {
     mainWindow.webContents.send("window:maximized-change", false);
-  });
-
-  // --- Screen capture via media-engine ---
-
-  // System executables to hide from the screen share picker
-  const HIDDEN_PROCESS_NAMES = new Set([
-    "textinputhost.exe",
-    "applicationframehost.exe",
-    "searchhost.exe",
-    "startmenuexperiencehost.exe",
-    "shellexperiencehost.exe",
-    "lockapp.exe",
-    "systemsettings.exe",
-  ]);
-
-  ipcMain.handle("screen:getSources", () => ({
-    windows: mediaEngine.listWindows().filter((w: any) => {
-      if (HIDDEN_PROCESS_NAMES.has(w.processName.toLowerCase())) return false;
-      return true;
-    }),
-    displays: mediaEngine.listDisplays(),
-  }));
-
-  ipcMain.handle("screen:start", async (_event, options) => {
-    if (mediaEngine.isScreenShareRunning()) {
-      mediaEngine.stopScreenShare();
-    }
-
-    console.log("[media-engine] startScreenShare:", JSON.stringify({
-      serverUrl: options.serverUrl,
-      targetType: options.targetType, targetId: options.targetId,
-      fps: options.fps, bitrate: options.bitrate,
-      captureAudio: options.captureAudio,
-    }));
-
-    try {
-      await mediaEngine.startScreenShare(
-        {
-          serverUrl: options.serverUrl,
-          token: options.token,
-          targetType: options.targetType,
-          targetId: options.targetId,
-          fps: options.fps,
-          bitrate: options.bitrate,
-          showCursor: options.cursor ?? true,
-          captureAudio: options.captureAudio ?? false,
-        },
-        // NAPI-RS ThreadsafeFunction uses error-first callbacks:
-        // Ok(value) → callback(null, value), Err(e) → callback(e)
-        (...args: any[]) => {
-          const error = args[0] ?? args[1] ?? "Unknown error";
-          console.error("[media-engine] onError:", error);
-          if (!mainWindow.isDestroyed()) {
-            mainWindow.webContents.send("screen:error", String(error));
-          }
-        },
-        (...args: any[]) => {
-          console.log("[media-engine] onStopped");
-          if (!mainWindow.isDestroyed()) {
-            mainWindow.webContents.send("screen:stopped");
-          }
-        },
-        (...args: any[]) => {
-          // stats is in args[1] (error-first) or args[0]
-          const stats = args[1] ?? args[0];
-          if (stats) {
-            console.log(`[media-engine] stats: ${stats.fps?.toFixed(1)}fps, encode=${stats.encodeMs?.toFixed(1)}ms, bitrate=${stats.bitrateMbps?.toFixed(1)}Mbps, frames=${stats.framesEncoded}, sent=${stats.bytesSent}`);
-          }
-          if (stats && !mainWindow.isDestroyed()) {
-            mainWindow.webContents.send("screen:stats", stats);
-          }
-        },
-      );
-      console.log("[media-engine] startScreenShare resolved successfully");
-    } catch (err: any) {
-      console.error("[media-engine] startScreenShare rejected:", err);
-      if (!mainWindow.isDestroyed()) {
-        mainWindow.webContents.send("screen:error", err?.message ?? String(err));
-      }
-    }
-  });
-
-  ipcMain.on("screen:stop", () => {
-    mediaEngine.stopScreenShare();
-  });
-
-  ipcMain.on("screen:forceKeyframe", () => {
-    mediaEngine.forceKeyframe();
   });
 
   if (is.dev && process.env["ELECTRON_RENDERER_URL"]) {

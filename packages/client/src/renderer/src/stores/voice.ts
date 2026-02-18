@@ -1,6 +1,5 @@
 import { create } from "zustand";
 import { WsOpcode } from "@migo/shared";
-import type { CapturePreset } from "@/components/voice/screen-share-picker";
 import type { VoiceState, VoiceChannelUser } from "@migo/shared";
 import { livekitManager } from "@/lib/livekit";
 import { wsManager } from "@/lib/ws";
@@ -12,16 +11,6 @@ import {
 } from "@/lib/sounds";
 import { useAuthStore } from "./auth";
 import { useMemberStore } from "./members";
-
-const CapturePresets: Record<
-  CapturePreset,
-  { fps: number; bitrate: number }
-> = {
-  "720p30": { fps: 30, bitrate: 8_000_000 },
-  "1080p30": { fps: 30, bitrate: 15_000_000 },
-  "1080p60": { fps: 60, bitrate: 25_000_000 },
-  "1440p60": { fps: 60, bitrate: 50_000_000 },
-};
 
 interface VoiceStoreState {
   currentChannelId: string | null;
@@ -48,7 +37,7 @@ interface VoiceStoreState {
   getChannelUsers: (channelId: string) => VoiceChannelUser[];
   setUserVolume: (userId: string, volume: number) => void;
   toggleScreenShare: () => void;
-  startScreenShare: (target: { type: string; id: number }, preset?: CapturePreset) => Promise<void>;
+  startScreenShare: (target: { type: string; id: number }) => Promise<void>;
   stopScreenShare: () => void;
   handleScreenShareStart: (data: { userId: string; channelId: string }) => void;
   handleScreenShareStop: (data: { userId: string }) => void;
@@ -90,9 +79,6 @@ function voiceSignal(action: string, data?: any): Promise<any> {
     }, 10_000);
   });
 }
-
-// Module-level screen capture cleanup state
-let cleanupScreenCapture: (() => void) | null = null;
 
 export const useVoiceStore = create<VoiceStoreState>()((set, get) => ({
   currentChannelId: null,
@@ -189,14 +175,12 @@ export const useVoiceStore = create<VoiceStoreState>()((set, get) => ({
 
   leaveChannel: () => {
     const { currentChannelId } = get();
+    // Stop browser screen share if active
+    livekitManager.stopScreenShare().catch(() => {});
+
     livekitManager.disconnect();
     livekitManager.setSpeakingCallback(null);
     livekitManager.setScreenTrackCallback(null);
-
-    // Stop active screen capture if any
-    window.screenAPI.stop();
-    cleanupScreenCapture?.();
-    cleanupScreenCapture = null;
 
     // Tell server we left
     wsManager.send({
@@ -414,56 +398,31 @@ export const useVoiceStore = create<VoiceStoreState>()((set, get) => ({
     }
   },
 
-  startScreenShare: async (target: { type: string; id: number }, preset?: CapturePreset) => {
+  startScreenShare: async (target: { type: string; id: number }) => {
     set({ showScreenSharePicker: false });
 
     try {
-      const presetConfig = CapturePresets[preset ?? "1440p60"];
+      // Pre-select the source in the main process so that when
+      // getDisplayMedia() is called, the handler provides the right source.
+      await window.screenAPI.selectSource(target.type, target.id);
 
-      // Request a screen share token from the server (identity: userId|screen)
-      const { token, url } = await voiceSignal("startScreenShare", {});
+      // Use LiveKit SDK's setScreenShareEnabled which calls getDisplayMedia()
+      // internally. Chrome's full WebRTC pipeline handles encoding, FEC,
+      // congestion control, and NACK (tested at 55fps 1440p).
+      await livekitManager.startScreenShare();
 
-      // Start media-engine capture in main process (handles capture + encode + WebRTC natively)
-      await window.screenAPI.start({
-        serverUrl: url,
-        token,
-        targetType: target.type,
-        targetId: target.id,
-        fps: presetConfig.fps,
-        bitrate: presetConfig.bitrate,
-        cursor: true,
-        captureAudio: target.type === "display",
-      });
-
-      const unsubError = window.screenAPI.onError((msg) => {
-        console.error("[media-engine] Error:", msg);
-      });
-
-      const unsubStopped = window.screenAPI.onStopped(() => {
-        get().stopScreenShare();
-      });
-
-      // Store cleanup functions
-      cleanupScreenCapture = () => {
-        unsubError();
-        unsubStopped();
-      };
+      // Notify server so other clients see the screen share icon
+      voiceSignal("startScreenShare", {}).catch(() => {});
 
       set({ isScreenSharing: true });
     } catch (err) {
       console.error("Failed to start screen share:", err);
-      window.screenAPI.stop();
-      cleanupScreenCapture?.();
-      cleanupScreenCapture = null;
       set({ isScreenSharing: false });
     }
   },
 
   stopScreenShare: () => {
-    // Stop media-engine capture in main process
-    window.screenAPI.stop();
-    cleanupScreenCapture?.();
-    cleanupScreenCapture = null;
+    livekitManager.stopScreenShare().catch(() => {});
 
     set({ isScreenSharing: false });
 

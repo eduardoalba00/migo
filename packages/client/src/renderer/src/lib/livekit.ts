@@ -58,6 +58,14 @@ export class LiveKitManager {
     this.room = new Room({
       adaptiveStream: false,
       dynacast: false,
+      publishDefaults: {
+        screenShareEncoding: {
+          maxBitrate: 50_000_000,
+          maxFramerate: 60,
+        },
+        screenShareSimulcastLayers: [],
+        videoCodec: "vp9",
+      },
     });
 
     this.audioContext = new AudioContext();
@@ -150,6 +158,31 @@ export class LiveKitManager {
 
   getUserVolume(userId: string): number {
     return this.userVolumes.get(userId) ?? 1;
+  }
+
+  async startScreenShare(): Promise<void> {
+    if (!this.room) return;
+
+    // Use LiveKit SDK's setScreenShareEnabled which calls getDisplayMedia()
+    // internally. Electron's setDisplayMediaRequestHandler provides the source.
+    // This uses Chrome's full WebRTC pipeline (FEC, congestion control, NACK).
+    await this.room.localParticipant.setScreenShareEnabled(true, {
+      audio: false,
+      contentHint: "motion",
+      resolution: { width: 3440, height: 1440, frameRate: 60 },
+    }, {
+      screenShareEncoding: {
+        maxBitrate: 50_000_000,
+        maxFramerate: 60,
+      },
+      screenShareSimulcastLayers: [],
+      videoCodec: "vp9",
+    });
+  }
+
+  async stopScreenShare(): Promise<void> {
+    if (!this.room) return;
+    await this.room.localParticipant.setScreenShareEnabled(false);
   }
 
   static async getAudioDevices(): Promise<{ inputs: MediaDeviceInfo[]; outputs: MediaDeviceInfo[] }> {
@@ -303,11 +336,18 @@ export class LiveKitManager {
           }
         }
 
-        // Handle screen share video tracks from userId|screen participants
+        // Handle screen share video tracks — either from userId|screen
+        // participants (native engine) or same-participant screen share source
         if (track.kind === Track.Kind.Video) {
-          const userId = this.extractScreenShareUserId(participant.identity);
-          if (userId) {
-            this.screenTrackCallback?.(userId, track.mediaStreamTrack, "add");
+          if (publication.source === Track.Source.ScreenShare) {
+            // Browser-based screen share: source is ScreenShare on the same participant
+            this.screenTrackCallback?.(participant.identity, track.mediaStreamTrack, "add");
+          } else {
+            // Native engine: separate participant with userId|screen identity
+            const userId = this.extractScreenShareUserId(participant.identity);
+            if (userId) {
+              this.screenTrackCallback?.(userId, track.mediaStreamTrack, "add");
+            }
           }
         }
       },
@@ -337,9 +377,13 @@ export class LiveKitManager {
 
         // Handle screen share video track removal
         if (track.kind === Track.Kind.Video) {
-          const userId = this.extractScreenShareUserId(participant.identity);
-          if (userId) {
-            this.screenTrackCallback?.(userId, track.mediaStreamTrack, "remove");
+          if (publication.source === Track.Source.ScreenShare) {
+            this.screenTrackCallback?.(participant.identity, track.mediaStreamTrack, "remove");
+          } else {
+            const userId = this.extractScreenShareUserId(participant.identity);
+            if (userId) {
+              this.screenTrackCallback?.(userId, track.mediaStreamTrack, "remove");
+            }
           }
         }
       },
