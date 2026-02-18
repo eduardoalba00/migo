@@ -93,8 +93,13 @@ export class LiveKitManager {
   private lastSpokeAt = new Map<string, number>();
   private vadInterval: ReturnType<typeof setInterval> | null = null;
 
-  // Audio elements attached to remote audio tracks
+  // Audio elements attached to remote audio tracks (mic only)
   private attachedAudioElements = new Map<string, HTMLMediaElement[]>();
+
+  // Screen share audio elements, tracked separately for independent volume control
+  private screenShareAudioElements = new Map<string, HTMLMediaElement[]>();
+  private screenShareVolumes = new Map<string, number>();
+  private screenShareMuted = new Map<string, boolean>();
 
   // Screen share audio (WASAPI capture)
   private screenAudioContext: AudioContext | null = null;
@@ -153,6 +158,15 @@ export class LiveKitManager {
     }
     this.attachedAudioElements.clear();
 
+    // Detach screen share audio elements
+    for (const elements of this.screenShareAudioElements.values()) {
+      for (const el of elements) {
+        el.srcObject = null;
+        el.remove();
+      }
+    }
+    this.screenShareAudioElements.clear();
+
     if (this.room) {
       await this.room.disconnect();
       this.room = null;
@@ -182,6 +196,14 @@ export class LiveKitManager {
           el.volume = this.userVolumes.get(participant.identity) ?? 1;
         }
       }
+      // Also mute/unmute screen share audio
+      const ssElements = this.screenShareAudioElements.get(participant.identity) ?? [];
+      for (const el of ssElements) {
+        el.muted = deafened || (this.screenShareMuted.get(participant.identity) ?? false);
+        if (!deafened) {
+          el.volume = this.screenShareVolumes.get(participant.identity) ?? 1;
+        }
+      }
     }
   }
 
@@ -189,6 +211,13 @@ export class LiveKitManager {
     this.selectedOutputDeviceId = deviceId;
     const sinkId = deviceId || "";
     for (const elements of this.attachedAudioElements.values()) {
+      for (const el of elements) {
+        if ("setSinkId" in el) {
+          (el as any).setSinkId(sinkId).catch(() => {});
+        }
+      }
+    }
+    for (const elements of this.screenShareAudioElements.values()) {
       for (const el of elements) {
         if ("setSinkId" in el) {
           (el as any).setSinkId(sinkId).catch(() => {});
@@ -219,6 +248,29 @@ export class LiveKitManager {
 
   getUserVolume(userId: string): number {
     return this.userVolumes.get(userId) ?? 1;
+  }
+
+  setScreenShareVolume(userId: string, volume: number): void {
+    const clamped = Math.max(0, Math.min(1, volume));
+    this.screenShareVolumes.set(userId, clamped);
+
+    const elements = this.screenShareAudioElements.get(userId) ?? [];
+    for (const el of elements) {
+      el.volume = clamped;
+    }
+  }
+
+  getScreenShareVolume(userId: string): number {
+    return this.screenShareVolumes.get(userId) ?? 1;
+  }
+
+  setScreenShareMuted(userId: string, muted: boolean): void {
+    this.screenShareMuted.set(userId, muted);
+
+    const elements = this.screenShareAudioElements.get(userId) ?? [];
+    for (const el of elements) {
+      el.muted = muted;
+    }
   }
 
   async startScreenShare(sourceId?: string, sourceType?: "window" | "screen"): Promise<void> {
@@ -541,6 +593,14 @@ export class LiveKitManager {
         }
         this.attachedAudioElements.delete(participant.identity);
       }
+      const ssElements = this.screenShareAudioElements.get(participant.identity);
+      if (ssElements) {
+        for (const el of ssElements) {
+          el.srcObject = null;
+          el.remove();
+        }
+        this.screenShareAudioElements.delete(participant.identity);
+      }
     });
 
     this.room.on(
@@ -548,18 +608,29 @@ export class LiveKitManager {
       (track: RemoteTrack, publication: RemoteTrackPublication, participant: RemoteParticipant) => {
         if (track.kind === Track.Kind.Audio) {
           const el = track.attach();
-          const vol = this.userVolumes.get(participant.identity) ?? 1;
-          el.volume = vol;
           if (this.selectedOutputDeviceId && "setSinkId" in el) {
             (el as any).setSinkId(this.selectedOutputDeviceId).catch(() => {});
           }
-          const existing = this.attachedAudioElements.get(participant.identity) ?? [];
-          existing.push(el);
-          this.attachedAudioElements.set(participant.identity, existing);
 
-          // Only create VAD analyser for mic audio, not screen share audio
-          if (publication.source === Track.Source.Microphone) {
-            this.createAnalyser(participant.identity, track.mediaStreamTrack);
+          if (publication.source === Track.Source.ScreenShareAudio) {
+            // Screen share audio → separate tracking for independent volume control
+            const vol = this.screenShareVolumes.get(participant.identity) ?? 1;
+            el.volume = vol;
+            el.muted = this.screenShareMuted.get(participant.identity) ?? false;
+            const existing = this.screenShareAudioElements.get(participant.identity) ?? [];
+            existing.push(el);
+            this.screenShareAudioElements.set(participant.identity, existing);
+          } else {
+            // Mic audio → existing behavior
+            const vol = this.userVolumes.get(participant.identity) ?? 1;
+            el.volume = vol;
+            const existing = this.attachedAudioElements.get(participant.identity) ?? [];
+            existing.push(el);
+            this.attachedAudioElements.set(participant.identity, existing);
+
+            if (publication.source === Track.Source.Microphone) {
+              this.createAnalyser(participant.identity, track.mediaStreamTrack);
+            }
           }
         }
 
@@ -588,17 +659,28 @@ export class LiveKitManager {
           const detachedSet = new Set(detached);
           for (const el of detached) el.remove();
 
-          // Remove only the detached elements, keep others (e.g. mic vs screen audio)
-          const remaining = (this.attachedAudioElements.get(participant.identity) ?? [])
-            .filter((el) => !detachedSet.has(el));
-          if (remaining.length > 0) {
-            this.attachedAudioElements.set(participant.identity, remaining);
+          if (publication.source === Track.Source.ScreenShareAudio) {
+            // Clean up from screen share audio elements
+            const remaining = (this.screenShareAudioElements.get(participant.identity) ?? [])
+              .filter((el) => !detachedSet.has(el));
+            if (remaining.length > 0) {
+              this.screenShareAudioElements.set(participant.identity, remaining);
+            } else {
+              this.screenShareAudioElements.delete(participant.identity);
+            }
           } else {
-            this.attachedAudioElements.delete(participant.identity);
-          }
+            // Clean up from mic audio elements
+            const remaining = (this.attachedAudioElements.get(participant.identity) ?? [])
+              .filter((el) => !detachedSet.has(el));
+            if (remaining.length > 0) {
+              this.attachedAudioElements.set(participant.identity, remaining);
+            } else {
+              this.attachedAudioElements.delete(participant.identity);
+            }
 
-          if (publication.source === Track.Source.Microphone) {
-            this.removeAnalyser(participant.identity);
+            if (publication.source === Track.Source.Microphone) {
+              this.removeAnalyser(participant.identity);
+            }
           }
         }
 

@@ -34,6 +34,12 @@ interface VoiceStoreState {
   focusedScreenShareUserId: string | null;
   showScreenSharePicker: boolean;
 
+  // Screen share audio volume (independent from mic volume)
+  screenShareVolumes: Record<string, number>;
+  screenShareMuted: Record<string, boolean>;
+  setScreenShareVolume: (userId: string, volume: number) => void;
+  toggleScreenShareMute: (userId: string) => void;
+
   joinChannel: (channelId: string, serverId: string) => Promise<void>;
   leaveChannel: () => void;
   toggleMute: () => void;
@@ -100,6 +106,8 @@ export const useVoiceStore = create<VoiceStoreState>()((set, get) => ({
   screenShareTracks: {},
   focusedScreenShareUserId: null,
   showScreenSharePicker: false,
+  screenShareVolumes: {},
+  screenShareMuted: {},
 
   toggleNoiseSuppression: async () => {
     const newValue = !get().noiseSuppression;
@@ -249,6 +257,8 @@ export const useVoiceStore = create<VoiceStoreState>()((set, get) => ({
       screenShareTracks: {},
       focusedScreenShareUserId: null,
       showScreenSharePicker: false,
+      screenShareVolumes: {},
+      screenShareMuted: {},
     });
   },
 
@@ -416,6 +426,29 @@ export const useVoiceStore = create<VoiceStoreState>()((set, get) => ({
       stored[userId] = volume;
       localStorage.setItem("migo-user-volumes", JSON.stringify(stored));
     } catch {}
+  },
+
+  setScreenShareVolume: (userId, volume) => {
+    livekitManager.setScreenShareVolume(userId, volume);
+    set((s) => ({
+      screenShareVolumes: { ...s.screenShareVolumes, [userId]: volume },
+    }));
+    try {
+      const stored = JSON.parse(
+        localStorage.getItem("migo-screen-share-volumes") || "{}",
+      );
+      stored[userId] = volume;
+      localStorage.setItem("migo-screen-share-volumes", JSON.stringify(stored));
+    } catch {}
+  },
+
+  toggleScreenShareMute: (userId) => {
+    const current = get().screenShareMuted[userId] ?? false;
+    const newMuted = !current;
+    livekitManager.setScreenShareMuted(userId, newMuted);
+    set((s) => ({
+      screenShareMuted: { ...s.screenShareMuted, [userId]: newMuted },
+    }));
   },
 
   toggleScreenShare: () => {

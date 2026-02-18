@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from "react";
-import { Maximize2, Minimize2, ArrowLeft } from "lucide-react";
+import { Maximize2, Minimize2, ArrowLeft, Volume2, VolumeX } from "lucide-react";
 import { useVoiceStore } from "@/stores/voice";
 
 /**
@@ -114,6 +114,7 @@ interface FocusedViewProps {
   containerRef: React.RefObject<HTMLDivElement | null>;
   track: MediaStreamTrack;
   sharerName: string;
+  sharerUserId: string;
   showBackButton: boolean;
   onBack: () => void;
   isFullscreen: boolean;
@@ -124,12 +125,19 @@ function FocusedView({
   containerRef,
   track,
   sharerName,
+  sharerUserId,
   showBackButton,
   onBack,
   isFullscreen,
   onToggleFullscreen,
 }: FocusedViewProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const [hovered, setHovered] = useState(false);
+
+  const screenShareVolume = useVoiceStore((s) => s.screenShareVolumes[sharerUserId] ?? 1);
+  const screenShareMuted = useVoiceStore((s) => s.screenShareMuted[sharerUserId] ?? false);
+  const setScreenShareVolume = useVoiceStore((s) => s.setScreenShareVolume);
+  const toggleScreenShareMute = useVoiceStore((s) => s.toggleScreenShareMute);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -144,7 +152,12 @@ function FocusedView({
   }, [track]);
 
   return (
-    <div ref={containerRef} className="relative flex-1 bg-black flex items-center justify-center">
+    <div
+      ref={containerRef}
+      className="relative flex-1 bg-black flex items-center justify-center"
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
       <video
         ref={videoRef}
         autoPlay
@@ -175,6 +188,38 @@ function FocusedView({
         >
           {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
         </button>
+      </div>
+      {/* Screen share audio controls */}
+      <div
+        className={`absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-black/70 rounded-lg px-3 py-2 transition-opacity duration-200 ${
+          hovered ? "opacity-100" : "opacity-0 pointer-events-none"
+        }`}
+      >
+        <button
+          onClick={() => toggleScreenShareMute(sharerUserId)}
+          className="text-white hover:text-white/80 transition-colors"
+          title={screenShareMuted ? "Unmute stream audio" : "Mute stream audio"}
+        >
+          {screenShareMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+        </button>
+        <input
+          type="range"
+          min={0}
+          max={100}
+          value={screenShareMuted ? 0 : Math.round(screenShareVolume * 100)}
+          onChange={(e) => {
+            const vol = Number(e.target.value) / 100;
+            setScreenShareVolume(sharerUserId, vol);
+            if (screenShareMuted && vol > 0) {
+              toggleScreenShareMute(sharerUserId);
+            }
+          }}
+          className="w-24 h-1 accent-white"
+          title={`${Math.round(screenShareVolume * 100)}%`}
+        />
+        <span className="text-white text-xs w-8 text-right tabular-nums">
+          {Math.round(screenShareVolume * 100)}%
+        </span>
       </div>
     </div>
   );
@@ -247,6 +292,7 @@ export function ScreenShareViewer({ tracks, getUserName }: ScreenShareViewerProp
         containerRef={containerRef}
         track={effectiveFocusedTrack}
         sharerName={getUserName(effectiveFocusedUserId)}
+        sharerUserId={effectiveFocusedUserId}
         showBackButton={userIds.length > 1}
         onBack={unfocusScreenShare}
         isFullscreen={isFullscreen}
