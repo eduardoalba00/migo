@@ -8,6 +8,8 @@ import {
   playLeaveSound,
   playMuteSound,
   playUnmuteSound,
+  playScreenShareStartSound,
+  playScreenShareStopSound,
 } from "@/lib/sounds";
 import { useAuthStore } from "./auth";
 import { useMemberStore } from "./members";
@@ -338,6 +340,22 @@ export const useVoiceStore = create<VoiceStoreState>()((set, get) => ({
   },
 
   handleVoiceStateUpdate: (state: VoiceState) => {
+    // Play sounds for remote users joining/leaving our channel
+    const { currentChannelId, isConnecting, channelUsers } = get();
+    const selfId = useAuthStore.getState().user?.id;
+
+    if (selfId && currentChannelId && !isConnecting && state.userId !== selfId) {
+      const wasInOurChannel = !!channelUsers[currentChannelId]?.[state.userId];
+
+      if (state.channelId === currentChannelId && !wasInOurChannel) {
+        // Remote user joined our channel
+        playJoinSound();
+      } else if (state.channelId === null && wasInOurChannel) {
+        // Remote user left our channel
+        playLeaveSound();
+      }
+    }
+
     set((s) => {
       const channelUsers = { ...s.channelUsers };
 
@@ -486,6 +504,7 @@ export const useVoiceStore = create<VoiceStoreState>()((set, get) => ({
       voiceSignal("startScreenShare", {}).catch(() => {});
 
       set({ isScreenSharing: true });
+      playScreenShareStartSound();
     } catch (err) {
       console.error("Failed to start screen share:", err);
       set({ isScreenSharing: false });
@@ -495,6 +514,7 @@ export const useVoiceStore = create<VoiceStoreState>()((set, get) => ({
   stopScreenShare: () => {
     livekitManager.stopScreenShare().catch(() => {});
 
+    playScreenShareStopSound();
     set({ isScreenSharing: false });
 
     // Notify server
@@ -502,6 +522,11 @@ export const useVoiceStore = create<VoiceStoreState>()((set, get) => ({
   },
 
   handleScreenShareStart: (data: { userId: string; channelId: string }) => {
+    const selfId = useAuthStore.getState().user?.id;
+    if (data.userId !== selfId) {
+      playScreenShareStartSound();
+    }
+
     const { channelUsers } = get();
 
     // Update the user's screenSharing status
@@ -523,6 +548,11 @@ export const useVoiceStore = create<VoiceStoreState>()((set, get) => ({
   },
 
   handleScreenShareStop: (data: { userId: string }) => {
+    const selfId = useAuthStore.getState().user?.id;
+    if (data.userId !== selfId) {
+      playScreenShareStopSound();
+    }
+
     // Track cleanup is handled by LiveKit TrackUnsubscribed automatically
 
     set((s) => {

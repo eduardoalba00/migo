@@ -133,3 +133,70 @@ export function playMentionSound() {
   audio.currentTime = 0;
   audio.play().catch(() => {});
 }
+
+function createTwoTone(
+  freq1: number,
+  freq2: number,
+  duration: number,
+  volume = 0.3,
+): HTMLAudioElement {
+  const sampleRate = 44100;
+  const offlineCtx = new OfflineAudioContext(1, sampleRate * duration, sampleRate);
+  const half = duration / 2;
+
+  // First tone
+  const osc1 = offlineCtx.createOscillator();
+  const gain1 = offlineCtx.createGain();
+  osc1.connect(gain1);
+  gain1.connect(offlineCtx.destination);
+  osc1.frequency.value = freq1;
+  gain1.gain.setValueAtTime(volume, 0);
+  gain1.gain.exponentialRampToValueAtTime(0.001, half);
+  osc1.start(0);
+  osc1.stop(half);
+
+  // Second tone
+  const osc2 = offlineCtx.createOscillator();
+  const gain2 = offlineCtx.createGain();
+  osc2.connect(gain2);
+  gain2.connect(offlineCtx.destination);
+  osc2.frequency.value = freq2;
+  gain2.gain.setValueAtTime(volume, half);
+  gain2.gain.exponentialRampToValueAtTime(0.001, duration);
+  osc2.start(half);
+  osc2.stop(duration);
+
+  const audio = new Audio();
+  offlineCtx.startRendering().then((buffer) => {
+    const wavBlob = bufferToWav(buffer);
+    audio.src = URL.createObjectURL(wavBlob);
+  });
+
+  return audio;
+}
+
+function getOrCreateTwoToneSound(
+  key: string,
+  freq1: number,
+  freq2: number,
+  duration: number,
+): HTMLAudioElement {
+  if (!soundCache.has(key)) {
+    soundCache.set(key, createTwoTone(freq1, freq2, duration, 0.3));
+  }
+  return soundCache.get(key)!;
+}
+
+export function playScreenShareStartSound() {
+  const audio = getOrCreateTwoToneSound("screen-share-start", 880, 1320, 0.2);
+  audio.volume = soundVolume;
+  audio.currentTime = 0;
+  audio.play().catch(() => {});
+}
+
+export function playScreenShareStopSound() {
+  const audio = getOrCreateTwoToneSound("screen-share-stop", 660, 440, 0.2);
+  audio.volume = soundVolume;
+  audio.currentTime = 0;
+  audio.play().catch(() => {});
+}
