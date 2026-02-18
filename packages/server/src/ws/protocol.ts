@@ -130,6 +130,7 @@ export function handleConnection(
                   serverId: vs.serverId,
                   muted: vs.muted,
                   deafened: vs.deafened,
+                  screenSharing: vs.screenSharing,
                   username: u?.username ?? "",
                   displayName: u?.displayName ?? "",
                   avatarUrl: u?.avatarUrl ?? null,
