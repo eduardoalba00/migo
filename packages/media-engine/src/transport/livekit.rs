@@ -146,8 +146,8 @@ fn transport_thread(
         }
     };
 
-    tracing::info!(
-        "Joined room: {:?}, participant: {:?}",
+    eprintln!(
+        "[transport] Joined room: {:?}, participant: {:?}",
         join.room.as_ref().map(|r| &r.name),
         join.participant.as_ref().map(|p| &p.identity),
     );
@@ -222,6 +222,9 @@ fn transport_thread(
     let mut pending_offer: Option<SdpPendingOffer> = Some(pending);
     let mut connected = false;
     let mut buf = vec![0u8; 2000];
+    let mut transport_stats_timer = Instant::now();
+    let mut frames_sent = 0u64;
+    let mut frames_dropped = 0u64;
 
     loop {
         if stop_flag.load(Ordering::Relaxed) {
@@ -281,12 +284,16 @@ fn transport_thread(
             }
         }
 
-        // Process transport commands (non-blocking)
+        // Process transport commands (non-blocking, limit batch size to avoid stalling)
+        let mut cmds_processed = 0;
         while let Ok(cmd) = cmd_rx.try_recv() {
             match cmd {
                 TransportCommand::VideoFrame { data, timestamp_90khz, .. } => {
                     if connected {
                         send_video_frame(&mut rtc, video_mid, &data, timestamp_90khz);
+                        frames_sent += 1;
+                    } else {
+                        frames_dropped += 1;
                     }
                 }
                 TransportCommand::AudioFrame { .. } => {
@@ -301,24 +308,45 @@ fn transport_thread(
                     break;
                 }
             }
+            cmds_processed += 1;
+            if cmds_processed > 5 {
+                break; // Don't process too many at once, let str0m send
+            }
         }
 
-        // Drive str0m — process all outputs
+        // Print transport status every 5 seconds
+        if transport_stats_timer.elapsed() >= Duration::from_secs(5) {
+            eprintln!(
+                "[transport] connected={}, frames_sent={}, frames_dropped={}, pending_offer={}",
+                connected, frames_sent, frames_dropped, pending_offer.is_some()
+            );
+            transport_stats_timer = Instant::now();
+        }
+
+        // Drive str0m — process outputs (limit iterations to prevent spin)
+        let mut poll_iters = 0;
         let timeout = loop {
+            poll_iters += 1;
+            if poll_iters > 1000 {
+                // Safety valve: don't spin indefinitely
+                break Instant::now() + Duration::from_millis(1);
+            }
             match rtc.poll_output() {
                 Ok(Output::Timeout(t)) => break t,
                 Ok(Output::Transmit(t)) => {
                     let _ = socket.send_to(&t.contents, t.destination);
                 }
                 Ok(Output::Event(e)) => match e {
-                    Event::IceConnectionStateChange(IceConnectionState::Connected) => {
-                        tracing::info!("ICE connected");
-                        connected = true;
-                    }
-                    Event::IceConnectionStateChange(IceConnectionState::Disconnected) => {
-                        tracing::warn!("ICE disconnected");
-                        connected = false;
-                        stop_flag.store(true, Ordering::Relaxed);
+                    Event::IceConnectionStateChange(state) => {
+                        eprintln!("[transport] ICE state: {:?}", state);
+                        match state {
+                            IceConnectionState::Connected => { connected = true; }
+                            IceConnectionState::Disconnected => {
+                                connected = false;
+                                stop_flag.store(true, Ordering::Relaxed);
+                            }
+                            _ => {}
+                        }
                     }
                     Event::KeyframeRequest(req) => {
                         tracing::debug!("Keyframe requested for mid={:?}", req.mid);

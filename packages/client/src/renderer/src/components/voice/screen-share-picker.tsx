@@ -33,12 +33,12 @@ export function ScreenSharePicker() {
     useVoiceStore.setState({ showScreenSharePicker: false });
   };
 
-  const handleSelectDisplay = (id: number) => {
-    startScreenShare({ type: "display", id }, preset);
+  const handleSelectDisplay = (index: number) => {
+    startScreenShare({ type: "display", id: index }, preset);
   };
 
-  const handleSelectWindow = (hwnd: number, pid: number) => {
-    startScreenShare({ type: "window", id: hwnd, pid }, preset);
+  const handleSelectWindow = (handle: number) => {
+    startScreenShare({ type: "window", id: handle }, preset);
   };
 
   const hasNoSources = !sources || (sources.displays.length === 0 && sources.windows.length === 0);
@@ -80,8 +80,8 @@ export function ScreenSharePicker() {
                 <div className="grid grid-cols-2 gap-3">
                   {sources!.displays.map((display) => (
                     <button
-                      key={display.id}
-                      onClick={() => handleSelectDisplay(display.id)}
+                      key={display.index}
+                      onClick={() => handleSelectDisplay(display.index)}
                       className="group flex flex-col rounded-lg border border-border bg-card p-3 hover:border-primary hover:bg-accent transition-colors text-left"
                     >
                       <div className="flex items-center gap-3">
@@ -89,7 +89,7 @@ export function ScreenSharePicker() {
                         <div className="min-w-0">
                           <div className="text-sm font-medium truncate">{display.name}</div>
                           <div className="text-xs text-muted-foreground">
-                            {display.width}x{display.height}{display.primary ? " (Primary)" : ""}
+                            {display.width}x{display.height}{display.index === 0 ? " (Primary)" : ""}
                           </div>
                         </div>
                       </div>
@@ -104,15 +104,15 @@ export function ScreenSharePicker() {
                 <div className="grid grid-cols-2 gap-3">
                   {sources!.windows.map((win) => (
                     <button
-                      key={win.hwnd}
-                      onClick={() => handleSelectWindow(win.hwnd, win.pid)}
+                      key={win.handle}
+                      onClick={() => handleSelectWindow(win.handle)}
                       className="group flex flex-col rounded-lg border border-border bg-card p-3 hover:border-primary hover:bg-accent transition-colors text-left"
                     >
                       <div className="flex items-center gap-3">
                         <AppWindow className="h-6 w-6 text-muted-foreground shrink-0" />
                         <div className="min-w-0">
                           <div className="text-sm font-medium truncate">{win.title}</div>
-                          <div className="text-xs text-muted-foreground truncate">{win.exe}</div>
+                          <div className="text-xs text-muted-foreground truncate">{win.processName}</div>
                         </div>
                       </div>
                     </button>

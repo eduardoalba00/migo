@@ -13,7 +13,7 @@ if (process.env.MIGO_INSTANCE) {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const buttercap = require("buttercap");
+const mediaEngine = require("@migo/media-engine");
 
 function createWindow(): BrowserWindow {
   const mainWindow = new BrowserWindow({
@@ -60,11 +60,10 @@ function createWindow(): BrowserWindow {
     mainWindow.webContents.send("window:maximized-change", false);
   });
 
-  // --- Screen capture via buttercap ---
-  let captureSession: any = null;
+  // --- Screen capture via media-engine ---
 
   // System executables to hide from the screen share picker
-  const HIDDEN_EXES = new Set([
+  const HIDDEN_PROCESS_NAMES = new Set([
     "textinputhost.exe",
     "applicationframehost.exe",
     "searchhost.exe",
@@ -75,88 +74,78 @@ function createWindow(): BrowserWindow {
   ]);
 
   ipcMain.handle("screen:getSources", () => ({
-    windows: buttercap.listWindows().filter((w: any) => {
-      // Hide system windows and our own Electron windows
-      if (HIDDEN_EXES.has(w.exe.toLowerCase())) return false;
-      if (w.pid === process.pid) return false;
+    windows: mediaEngine.listWindows().filter((w: any) => {
+      if (HIDDEN_PROCESS_NAMES.has(w.processName.toLowerCase())) return false;
       return true;
     }),
-    displays: buttercap.listDisplays(),
+    displays: mediaEngine.listDisplays(),
   }));
 
-  ipcMain.handle("screen:start", (_event, options) => {
-    if (captureSession) {
-      captureSession.stop();
-      captureSession = null;
+  ipcMain.handle("screen:start", async (_event, options) => {
+    if (mediaEngine.isScreenShareRunning()) {
+      mediaEngine.stopScreenShare();
     }
 
-    // Per-process audio only works for processes with active audio sessions;
-    // fall back to system audio for display capture, no audio for window capture for now.
-    const audioMode = options.targetType === "display" ? "system" : "none";
-
-    console.log("[buttercap] createSession:", JSON.stringify({
-      target: { type: options.targetType, id: options.targetId },
-      fps: options.fps, bitrate: options.bitrate, audioMode,
+    console.log("[media-engine] startScreenShare:", JSON.stringify({
+      serverUrl: options.serverUrl,
+      targetType: options.targetType, targetId: options.targetId,
+      fps: options.fps, bitrate: options.bitrate,
+      captureAudio: options.captureAudio,
     }));
 
-    // Log window info for debugging
-    if (options.targetType === "window") {
-      const wins = buttercap.listWindows();
-      const match = wins.find((w: any) => w.hwnd === options.targetId);
-      console.log("[buttercap] target window:", match ? JSON.stringify(match) : "NOT FOUND");
+    try {
+      await mediaEngine.startScreenShare(
+        {
+          serverUrl: options.serverUrl,
+          token: options.token,
+          targetType: options.targetType,
+          targetId: options.targetId,
+          fps: options.fps,
+          bitrate: options.bitrate,
+          showCursor: options.cursor ?? true,
+          captureAudio: options.captureAudio ?? false,
+        },
+        // NAPI-RS ThreadsafeFunction uses error-first callbacks:
+        // Ok(value) → callback(null, value), Err(e) → callback(e)
+        (...args: any[]) => {
+          const error = args[0] ?? args[1] ?? "Unknown error";
+          console.error("[media-engine] onError:", error);
+          if (!mainWindow.isDestroyed()) {
+            mainWindow.webContents.send("screen:error", String(error));
+          }
+        },
+        (...args: any[]) => {
+          console.log("[media-engine] onStopped");
+          if (!mainWindow.isDestroyed()) {
+            mainWindow.webContents.send("screen:stopped");
+          }
+        },
+        (...args: any[]) => {
+          // stats is in args[1] (error-first) or args[0]
+          const stats = args[1] ?? args[0];
+          if (stats) {
+            console.log(`[media-engine] stats: ${stats.fps?.toFixed(1)}fps, encode=${stats.encodeMs?.toFixed(1)}ms, bitrate=${stats.bitrateMbps?.toFixed(1)}Mbps, frames=${stats.framesEncoded}, sent=${stats.bytesSent}`);
+          }
+          if (stats && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send("screen:stats", stats);
+          }
+        },
+      );
+      console.log("[media-engine] startScreenShare resolved successfully");
+    } catch (err: any) {
+      console.error("[media-engine] startScreenShare rejected:", err);
+      if (!mainWindow.isDestroyed()) {
+        mainWindow.webContents.send("screen:error", err?.message ?? String(err));
+      }
     }
-
-    captureSession = buttercap.createSession({
-      target: { type: options.targetType, id: options.targetId },
-      video: {
-        fps: options.fps,
-        codec: "h264",
-        preferHardware: true,
-        bitrate: options.bitrate,
-      },
-      cursor: options.cursor ?? true,
-      audio: { mode: audioMode },
-    });
-
-    captureSession.on("video-packet", (packet: any) => {
-      if (!mainWindow.isDestroyed()) {
-        mainWindow.webContents.send("screen:video-packet", {
-          data: new Uint8Array(packet.data),
-          timestampUs: packet.timestampUs,
-          keyframe: packet.keyframe,
-        });
-      }
-    });
-
-    captureSession.on("audio-packet", (packet: any) => {
-      if (!mainWindow.isDestroyed()) {
-        mainWindow.webContents.send("screen:audio-packet", {
-          data: new Uint8Array(packet.data),
-          timestampUs: packet.timestampUs,
-          samples: packet.samples,
-        });
-      }
-    });
-
-    captureSession.on("error", (err: Error) => {
-      if (!mainWindow.isDestroyed()) {
-        mainWindow.webContents.send("screen:error", err.message);
-      }
-    });
-
-    captureSession.on("stopped", () => {
-      if (!mainWindow.isDestroyed()) {
-        mainWindow.webContents.send("screen:stopped");
-      }
-      captureSession = null;
-    });
-
-    captureSession.start();
   });
 
   ipcMain.on("screen:stop", () => {
-    captureSession?.stop();
-    captureSession = null;
+    mediaEngine.stopScreenShare();
+  });
+
+  ipcMain.on("screen:forceKeyframe", () => {
+    mediaEngine.forceKeyframe();
   });
 
   if (is.dev && process.env["ELECTRON_RENDERER_URL"]) {

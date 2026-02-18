@@ -3,7 +3,6 @@ import { WsOpcode } from "@migo/shared";
 import type { CapturePreset } from "@/components/voice/screen-share-picker";
 import type { VoiceState, VoiceChannelUser } from "@migo/shared";
 import { livekitManager } from "@/lib/livekit";
-import { PCMAudioBridge } from "@/lib/pcm-audio-bridge";
 import { wsManager } from "@/lib/ws";
 import {
   playJoinSound,
@@ -49,7 +48,7 @@ interface VoiceStoreState {
   getChannelUsers: (channelId: string) => VoiceChannelUser[];
   setUserVolume: (userId: string, volume: number) => void;
   toggleScreenShare: () => void;
-  startScreenShare: (target: { type: string; id: number; pid?: number }, preset?: CapturePreset) => Promise<void>;
+  startScreenShare: (target: { type: string; id: number }, preset?: CapturePreset) => Promise<void>;
   stopScreenShare: () => void;
   handleScreenShareStart: (data: { userId: string; channelId: string }) => void;
   handleScreenShareStop: (data: { userId: string }) => void;
@@ -92,9 +91,8 @@ function voiceSignal(action: string, data?: any): Promise<any> {
   });
 }
 
-// Module-level buttercap cleanup state
+// Module-level screen capture cleanup state
 let cleanupScreenCapture: (() => void) | null = null;
-let audioBridge: PCMAudioBridge | null = null;
 
 export const useVoiceStore = create<VoiceStoreState>()((set, get) => ({
   currentChannelId: null,
@@ -199,8 +197,6 @@ export const useVoiceStore = create<VoiceStoreState>()((set, get) => ({
     window.screenAPI.stop();
     cleanupScreenCapture?.();
     cleanupScreenCapture = null;
-    audioBridge?.dispose();
-    audioBridge = null;
 
     // Tell server we left
     wsManager.send({
@@ -418,38 +414,29 @@ export const useVoiceStore = create<VoiceStoreState>()((set, get) => ({
     }
   },
 
-  startScreenShare: async (target: { type: string; id: number; pid?: number }, preset?: CapturePreset) => {
+  startScreenShare: async (target: { type: string; id: number }, preset?: CapturePreset) => {
     set({ showScreenSharePicker: false });
 
     try {
       const presetConfig = CapturePresets[preset ?? "1440p60"];
 
-      // Set up audio bridge: PCM from buttercap → AudioWorklet → MediaStreamTrack
-      audioBridge = new PCMAudioBridge();
-      const audioTrack = await audioBridge.init();
+      // Request a screen share token from the server (identity: userId|screen)
+      const { token, url } = await voiceSignal("startScreenShare", {});
 
-      // Start buttercap capture in main process
+      // Start media-engine capture in main process (handles capture + encode + WebRTC natively)
       await window.screenAPI.start({
+        serverUrl: url,
+        token,
         targetType: target.type,
         targetId: target.id,
         fps: presetConfig.fps,
         bitrate: presetConfig.bitrate,
         cursor: true,
-        audioPid: target.pid,
-      });
-
-      // Subscribe to video packets from buttercap → serialize → DataChannel
-      const unsubVideo = window.screenAPI.onVideoPacket((packet) => {
-        livekitManager.sendScreenPacket(packet.data, packet.timestampUs, packet.keyframe);
-      });
-
-      // Subscribe to audio packets from buttercap → feed into AudioWorklet
-      const unsubAudio = window.screenAPI.onAudioPacket((packet) => {
-        audioBridge?.feedPCM(packet.data);
+        captureAudio: target.type === "display",
       });
 
       const unsubError = window.screenAPI.onError((msg) => {
-        console.error("[buttercap] Error:", msg);
+        console.error("[media-engine] Error:", msg);
       });
 
       const unsubStopped = window.screenAPI.onStopped(() => {
@@ -458,58 +445,30 @@ export const useVoiceStore = create<VoiceStoreState>()((set, get) => ({
 
       // Store cleanup functions
       cleanupScreenCapture = () => {
-        unsubVideo();
-        unsubAudio();
         unsubError();
         unsubStopped();
       };
 
-      // Publish audio track via LiveKit
-      await livekitManager.publishScreenAudio(audioTrack);
-
       set({ isScreenSharing: true });
-
-      // Notify server about screen share
-      wsManager.send({
-        op: WsOpcode.VOICE_SIGNAL,
-        d: {
-          requestId: `ss_${Date.now()}`,
-          action: "startScreenShare",
-          data: {},
-        },
-      });
     } catch (err) {
       console.error("Failed to start screen share:", err);
       window.screenAPI.stop();
       cleanupScreenCapture?.();
       cleanupScreenCapture = null;
-      audioBridge?.dispose();
-      audioBridge = null;
       set({ isScreenSharing: false });
     }
   },
 
   stopScreenShare: () => {
-    // Stop buttercap capture in main process
+    // Stop media-engine capture in main process
     window.screenAPI.stop();
     cleanupScreenCapture?.();
     cleanupScreenCapture = null;
 
-    // Stop LiveKit screen data + audio
-    livekitManager.stopScreenSending();
-    livekitManager.unpublishScreenAudio();
-
-    // Dispose audio bridge
-    audioBridge?.dispose();
-    audioBridge = null;
-
     set({ isScreenSharing: false });
 
     // Notify server
-    wsManager.send({
-      op: WsOpcode.VOICE_SIGNAL,
-      d: { requestId: `ss_${Date.now()}`, action: "stopScreenShare", data: {} },
-    });
+    voiceSignal("stopScreenShare", {}).catch(() => {});
   },
 
   handleScreenShareStart: (data: { userId: string; channelId: string }) => {
@@ -534,8 +493,7 @@ export const useVoiceStore = create<VoiceStoreState>()((set, get) => ({
   },
 
   handleScreenShareStop: (data: { userId: string }) => {
-    // Clean up the decoder for this user (removes track via callback)
-    livekitManager.removeScreenDecoder(data.userId);
+    // Track cleanup is handled by LiveKit TrackUnsubscribed automatically
 
     set((s) => {
       // Update channelUsers to clear screenSharing flag

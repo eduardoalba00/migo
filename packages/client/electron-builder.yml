@@ -3,6 +3,8 @@ productName: Migo
 directories:
   buildResources: resources
   output: dist
+asarUnpack:
+  - "**/@migo/media-engine/**/*.node"
 files:
   - "!**/.vscode/*"
   - "!src/*"

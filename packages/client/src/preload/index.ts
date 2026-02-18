@@ -18,16 +18,7 @@ const screenAPI = {
   getSources: () => ipcRenderer.invoke("screen:getSources"),
   start: (options: any) => ipcRenderer.invoke("screen:start", options),
   stop: () => ipcRenderer.send("screen:stop"),
-  onVideoPacket: (cb: Function) => {
-    const handler = (_e: any, packet: any) => cb(packet);
-    ipcRenderer.on("screen:video-packet", handler);
-    return () => ipcRenderer.removeListener("screen:video-packet", handler);
-  },
-  onAudioPacket: (cb: Function) => {
-    const handler = (_e: any, packet: any) => cb(packet);
-    ipcRenderer.on("screen:audio-packet", handler);
-    return () => ipcRenderer.removeListener("screen:audio-packet", handler);
-  },
+  forceKeyframe: () => ipcRenderer.send("screen:forceKeyframe"),
   onError: (cb: Function) => {
     const handler = (_e: any, msg: string) => cb(msg);
     ipcRenderer.on("screen:error", handler);
@@ -37,6 +28,11 @@ const screenAPI = {
     const handler = () => cb();
     ipcRenderer.on("screen:stopped", handler);
     return () => ipcRenderer.removeListener("screen:stopped", handler);
+  },
+  onStats: (cb: Function) => {
+    const handler = (_e: any, stats: any) => cb(stats);
+    ipcRenderer.on("screen:stats", handler);
+    return () => ipcRenderer.removeListener("screen:stats", handler);
   },
 };
 

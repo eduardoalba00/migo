@@ -10,18 +10,16 @@ declare global {
   }
 
   interface WindowSource {
-    hwnd: number;
+    handle: number;
     title: string;
-    pid: number;
-    exe: string;
+    processName: string;
   }
 
   interface DisplaySource {
-    id: number;
+    index: number;
     name: string;
     width: number;
     height: number;
-    primary: boolean;
   }
 
   interface ScreenSources {
@@ -29,33 +27,31 @@ declare global {
     displays: DisplaySource[];
   }
 
-  interface VideoPacketData {
-    data: Uint8Array;
-    timestampUs: number;
-    keyframe: boolean;
-  }
-
-  interface AudioPacketData {
-    data: Uint8Array;
-    timestampUs: number;
-    samples: number;
+  interface EngineStats {
+    fps: number;
+    encodeMs: number;
+    bitrateMbps: number;
+    framesEncoded: number;
+    bytesSent: number;
   }
 
   interface ScreenAPI {
     getSources: () => Promise<ScreenSources>;
     start: (options: {
+      serverUrl: string;
+      token: string;
       targetType: string;
       targetId: number;
       fps: number;
       bitrate: number;
       cursor?: boolean;
-      audioPid?: number;
+      captureAudio?: boolean;
     }) => Promise<void>;
     stop: () => void;
-    onVideoPacket: (cb: (packet: VideoPacketData) => void) => () => void;
-    onAudioPacket: (cb: (packet: AudioPacketData) => void) => () => void;
+    forceKeyframe: () => void;
     onError: (cb: (message: string) => void) => () => void;
     onStopped: (cb: () => void) => () => void;
+    onStats: (cb: (stats: EngineStats) => void) => () => void;
   }
 
   interface UpdaterStatus {

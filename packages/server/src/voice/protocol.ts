@@ -110,6 +110,22 @@ export async function handleVoiceSignal(
       });
       broadcastVoiceState(connectionManager, db, updated.serverId, userId, updated.channelId, false, voiceState);
     }
+
+    // Generate a LiveKit token for the screen share participant (userId|screen)
+    try {
+      const roomName = `voice-${participant.channelId}`;
+      const screenIdentity = `${userId}|screen`;
+      const token = await livekit.generateToken(screenIdentity, screenIdentity, roomName);
+      send(socket, {
+        op: WsOpcode.VOICE_SIGNAL,
+        d: { requestId, action, data: { token, url: livekit.url } },
+      });
+    } catch (err: any) {
+      send(socket, {
+        op: WsOpcode.VOICE_SIGNAL,
+        d: { requestId, action, error: err.message || "Failed to generate screen share token" },
+      });
+    }
     return;
   }
 
@@ -124,6 +140,10 @@ export async function handleVoiceSignal(
       });
       broadcastVoiceState(connectionManager, db, updated.serverId, userId, updated.channelId, false, voiceState);
     }
+    send(socket, {
+      op: WsOpcode.VOICE_SIGNAL,
+      d: { requestId, action, data: {} },
+    });
     return;
   }
 

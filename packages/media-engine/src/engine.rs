@@ -93,7 +93,9 @@ impl MediaEngine {
         let first_frame = frame_rx
             .recv_timeout(Duration::from_secs(5))
             .map_err(|_| EngineError::Capture("No frame received within 5s".into()))?;
-        let (width, height) = (first_frame.width, first_frame.height);
+        // NV12 format requires even dimensions — round up if the captured frame has odd size
+        let width = (first_frame.width + 1) & !1;
+        let height = (first_frame.height + 1) & !1;
 
         // Connect transport
         let transport_config = TransportConfig {
@@ -220,8 +222,7 @@ fn encode_publish_thread(
             *force_keyframe = false;
         }
 
-        let tex = create_bgra_texture(&pipeline.gpu, frame);
-        match pipeline.encode_frame(&tex) {
+        match pipeline.encode_frame(&frame.data, frame.width, frame.height, frame.row_pitch) {
             Ok(packets) => {
                 for p in &packets {
                     let ts = (*total_frames as u32).wrapping_mul(90_000 / config.fps.max(1));
@@ -237,6 +238,10 @@ fn encode_publish_thread(
             }
         }
     };
+
+    // Frame rate limiter: only encode at the target FPS, drop excess frames
+    let frame_interval = Duration::from_secs_f64(1.0 / config.fps.max(1) as f64);
+    let mut last_encode_time = Instant::now();
 
     // Process first frame
     process_frame(
@@ -270,25 +275,53 @@ fn encode_publish_thread(
             break;
         }
 
-        // Wait for next capture frame
-        match frame_rx.recv_timeout(Duration::from_millis(100)) {
-            Ok(frame) => {
-                process_frame(
-                    &frame,
-                    &mut pipeline,
-                    &transport,
-                    &mut total_frames,
-                    &mut total_bytes,
-                    &mut interval_frames,
-                    &mut interval_bytes,
-                    &mut force_next_keyframe,
-                );
+        // Wait until it's time for the next frame
+        let elapsed = last_encode_time.elapsed();
+        if elapsed < frame_interval {
+            let remaining = frame_interval - elapsed;
+            std::thread::sleep(remaining);
+        }
+
+        // Drain the capture channel, keeping only the most recent frame.
+        // This prevents GPU-backed CapturedFrame objects from accumulating
+        // in the channel while we sleep for rate limiting.
+        let mut latest_frame = None;
+        loop {
+            match frame_rx.try_recv() {
+                Ok(frame) => { latest_frame = Some(frame); }
+                Err(std::sync::mpsc::TryRecvError::Empty) => break,
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                    tracing::warn!("Capture channel disconnected");
+                    stop_flag.store(true, Ordering::Relaxed);
+                    break;
+                }
             }
-            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => continue,
-            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
-                tracing::warn!("Capture channel disconnected");
-                break;
+        }
+
+        // If no frame was available, wait briefly for one
+        if latest_frame.is_none() && !stop_flag.load(Ordering::Relaxed) {
+            match frame_rx.recv_timeout(Duration::from_millis(100)) {
+                Ok(frame) => { latest_frame = Some(frame); }
+                Err(std::sync::mpsc::RecvTimeoutError::Timeout) => continue,
+                Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                    tracing::warn!("Capture channel disconnected");
+                    break;
+                }
             }
+        }
+
+        if let Some(frame) = latest_frame {
+            last_encode_time = Instant::now();
+            process_frame(
+                &frame,
+                &mut pipeline,
+                &transport,
+                &mut total_frames,
+                &mut total_bytes,
+                &mut interval_frames,
+                &mut interval_bytes,
+                &mut force_next_keyframe,
+            );
         }
 
         // Emit stats every second
@@ -342,40 +375,3 @@ fn audio_forward_thread(
     }
 }
 
-fn create_bgra_texture(
-    gpu: &crate::gpu::device::GpuDevice,
-    frame: &CapturedFrame,
-) -> windows::Win32::Graphics::Direct3D11::ID3D11Texture2D {
-    use windows::Win32::Graphics::Direct3D11::*;
-    use windows::Win32::Graphics::Dxgi::Common::*;
-
-    let desc = D3D11_TEXTURE2D_DESC {
-        Width: frame.width,
-        Height: frame.height,
-        MipLevels: 1,
-        ArraySize: 1,
-        Format: DXGI_FORMAT_B8G8R8A8_UNORM,
-        SampleDesc: DXGI_SAMPLE_DESC {
-            Count: 1,
-            Quality: 0,
-        },
-        Usage: D3D11_USAGE_DEFAULT,
-        BindFlags: D3D11_BIND_RENDER_TARGET.0 as u32,
-        CPUAccessFlags: 0,
-        MiscFlags: 0,
-    };
-
-    let init_data = D3D11_SUBRESOURCE_DATA {
-        pSysMem: frame.data.as_ptr() as *const _,
-        SysMemPitch: frame.row_pitch,
-        SysMemSlicePitch: 0,
-    };
-
-    let mut texture = None;
-    unsafe {
-        gpu.device
-            .CreateTexture2D(&desc, Some(&init_data), Some(&mut texture))
-            .expect("Create BGRA texture");
-    }
-    texture.unwrap()
-}

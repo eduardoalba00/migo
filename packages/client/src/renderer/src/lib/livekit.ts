@@ -2,19 +2,10 @@ import {
   Room,
   RoomEvent,
   Track,
-  type LocalTrackPublication,
   type RemoteParticipant,
   type RemoteTrackPublication,
   type RemoteTrack,
 } from "livekit-client";
-import {
-  ScreenDecoder,
-  SCREEN_DATA_TOPIC,
-  chunkPacket,
-  serializeConfig,
-  serializeFrame,
-  parseSPSResolution,
-} from "./screen-codec";
 
 export type SpeakingChangeCallback = (speakingUserIds: Set<string>) => void;
 export type ScreenTrackCallback = (
@@ -39,12 +30,6 @@ export class LiveKitManager {
   private screenTrackCallback: ScreenTrackCallback | null = null;
   private selectedOutputDeviceId: string | null = null;
   private userVolumes = new Map<string, number>();
-
-  // Custom screen share via buttercap H.264 + DataChannel
-  private configSent = false;
-  private lastConfigKey = "";
-  private screenDecoders = new Map<string, ScreenDecoder>();
-  private screenAudioPublication: LocalTrackPublication | null = null;
 
   // VAD state
   private audioContext: AudioContext | null = null;
@@ -99,85 +84,12 @@ export class LiveKitManager {
     }
     this.attachedAudioElements.clear();
 
-    // Clean up screen share state/decoders/audio
-    this.configSent = false;
-    this.lastConfigKey = "";
-    this.screenAudioPublication = null;
-    for (const decoder of this.screenDecoders.values()) {
-      decoder.stop();
-    }
-    this.screenDecoders.clear();
-
     if (this.room) {
       await this.room.disconnect();
       this.room = null;
     }
     this.speakingUsers.clear();
     this.lastSpokeAt.clear();
-  }
-
-  // --- Custom screen share via buttercap H.264 + DataChannel ---
-
-  sendScreenPacket(data: Uint8Array, timestampUs: number, keyframe: boolean): void {
-    if (!this.room) return;
-
-    // On keyframes, parse SPS and send config if resolution/codec changed (handles window resize)
-    if (keyframe) {
-      const res = parseSPSResolution(data);
-      if (res) {
-        const configKey = `${res.width}x${res.height}:${res.codec}`;
-        if (!this.configSent || configKey !== this.lastConfigKey) {
-          const configPacket = serializeConfig(res.width, res.height, res.codec);
-          for (const chunk of chunkPacket(configPacket)) {
-            this.room.localParticipant.publishData(chunk, {
-              reliable: true,
-              topic: SCREEN_DATA_TOPIC,
-            });
-          }
-          this.configSent = true;
-          this.lastConfigKey = configKey;
-          console.log("[screen] Config sent:", res.width, "x", res.height, res.codec);
-        }
-      }
-    }
-
-    // Serialize and chunk the H.264 frame
-    const framePacket = serializeFrame(keyframe, timestampUs, 0, data);
-    for (const chunk of chunkPacket(framePacket)) {
-      this.room.localParticipant.publishData(chunk, {
-        reliable: true,
-        topic: SCREEN_DATA_TOPIC,
-      });
-    }
-  }
-
-  stopScreenSending(): void {
-    this.configSent = false;
-    this.lastConfigKey = "";
-  }
-
-  async publishScreenAudio(track: MediaStreamTrack): Promise<void> {
-    if (!this.room) return;
-    this.screenAudioPublication = await this.room.localParticipant.publishTrack(track, {
-      source: Track.Source.ScreenShareAudio,
-    });
-  }
-
-  unpublishScreenAudio(): void {
-    if (this.screenAudioPublication) {
-      this.room?.localParticipant.unpublishTrack(this.screenAudioPublication.track!);
-      this.screenAudioPublication = null;
-    }
-  }
-
-  // Called when a remote participant stops screen sharing (via WS signal)
-  removeScreenDecoder(participantIdentity: string): void {
-    const decoder = this.screenDecoders.get(participantIdentity);
-    if (decoder) {
-      this.screenTrackCallback?.(participantIdentity, decoder.getTrack(), "remove");
-      decoder.stop();
-      this.screenDecoders.delete(participantIdentity);
-    }
   }
 
   async setMicEnabled(enabled: boolean): Promise<void> {
@@ -343,6 +255,17 @@ export class LiveKitManager {
     }
   }
 
+  /**
+   * Extract the real userId from a participant identity.
+   * Screen share participants use the format "userId|screen".
+   */
+  private extractScreenShareUserId(identity: string): string | null {
+    if (identity.endsWith("|screen")) {
+      return identity.slice(0, -"|screen".length);
+    }
+    return null;
+  }
+
   private setupEventListeners(): void {
     if (!this.room) return;
 
@@ -358,8 +281,6 @@ export class LiveKitManager {
         }
         this.attachedAudioElements.delete(participant.identity);
       }
-      // Clean up screen decoder if participant was sharing
-      this.removeScreenDecoder(participant.identity);
     });
 
     this.room.on(
@@ -379,6 +300,14 @@ export class LiveKitManager {
           // Only create VAD analyser for mic audio, not screen share audio
           if (publication.source === Track.Source.Microphone) {
             this.createAnalyser(participant.identity, track.mediaStreamTrack);
+          }
+        }
+
+        // Handle screen share video tracks from userId|screen participants
+        if (track.kind === Track.Kind.Video) {
+          const userId = this.extractScreenShareUserId(participant.identity);
+          if (userId) {
+            this.screenTrackCallback?.(userId, track.mediaStreamTrack, "add");
           }
         }
       },
@@ -405,33 +334,14 @@ export class LiveKitManager {
             this.removeAnalyser(participant.identity);
           }
         }
-      },
-    );
 
-    // Handle incoming screen share frames via DataChannel
-    this.room.on(
-      RoomEvent.DataReceived,
-      (payload: Uint8Array, participant?: RemoteParticipant, _kind?: unknown, topic?: string) => {
-        if (topic !== SCREEN_DATA_TOPIC || !participant) return;
-
-        const identity = participant.identity;
-
-        // Create decoder on first packet from this participant
-        if (!this.screenDecoders.has(identity)) {
-          const decoder = new ScreenDecoder();
-          this.screenDecoders.set(identity, decoder);
-          this.screenTrackCallback?.(identity, decoder.getTrack(), "add");
-        } else if (this.screenDecoders.get(identity)!.isStopped()) {
-          // Old decoder was stopped (e.g. reconnect) — replace it
-          const old = this.screenDecoders.get(identity)!;
-          this.screenTrackCallback?.(identity, old.getTrack(), "remove");
-          old.stop();
-          const decoder = new ScreenDecoder();
-          this.screenDecoders.set(identity, decoder);
-          this.screenTrackCallback?.(identity, decoder.getTrack(), "add");
+        // Handle screen share video track removal
+        if (track.kind === Track.Kind.Video) {
+          const userId = this.extractScreenShareUserId(participant.identity);
+          if (userId) {
+            this.screenTrackCallback?.(userId, track.mediaStreamTrack, "remove");
+          }
         }
-
-        this.screenDecoders.get(identity)!.feedChunk(payload);
       },
     );
   }

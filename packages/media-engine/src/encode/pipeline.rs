@@ -18,6 +18,7 @@ pub struct EncodePipeline {
     video_context: ID3D11VideoContext,
     video_processor: ID3D11VideoProcessor,
     enumerator: ID3D11VideoProcessorEnumerator,
+    bgra_texture: ID3D11Texture2D,
     nv12_texture: ID3D11Texture2D,
     config: EncoderConfig,
     frame_count: u64,
@@ -27,6 +28,9 @@ impl EncodePipeline {
     pub fn new(config: EncoderConfig) -> Result<Self, EngineError> {
         let gpu = GpuDevice::new()
             .map_err(|e| EngineError::Encode(format!("GPU device: {e}")))?;
+
+        let bgra_texture = create_bgra_staging_texture(&gpu.device, config.width, config.height)
+            .map_err(|e| EngineError::Encode(format!("BGRA texture: {e}")))?;
 
         let nv12_texture = create_nv12_texture(&gpu.device, config.width, config.height)
             .map_err(|e| EngineError::Encode(format!("NV12 texture: {e}")))?;
@@ -45,23 +49,50 @@ impl EncodePipeline {
             video_context,
             video_processor,
             enumerator,
+            bgra_texture,
             nv12_texture,
             config,
             frame_count: 0,
         })
     }
 
-    /// Convert a BGRA texture to NV12, then encode to H.264.
+    /// Upload raw BGRA frame data, convert to NV12, then encode to H.264.
+    /// Reuses a pre-allocated BGRA texture to avoid per-frame GPU allocations.
     pub fn encode_frame(
         &mut self,
-        bgra_texture: &ID3D11Texture2D,
+        data: &[u8],
+        width: u32,
+        height: u32,
+        row_pitch: u32,
     ) -> Result<Vec<EncodedPacket>, EngineError> {
-        // Step 1: BGRA → NV12 via video processor
+        // Step 1: Upload BGRA pixels into the reusable texture.
+        // Use a D3D11_BOX to limit the copy to the actual frame dimensions,
+        // since the texture may be larger (even-rounded for NV12).
         unsafe {
-            self.convert_bgra_to_nv12(bgra_texture)?;
+            let dst_box = D3D11_BOX {
+                left: 0,
+                top: 0,
+                front: 0,
+                right: width,
+                bottom: height,
+                back: 1,
+            };
+            self.gpu.context.UpdateSubresource(
+                &self.bgra_texture,
+                0,
+                Some(&dst_box),
+                data.as_ptr() as *const _,
+                row_pitch,
+                0,
+            );
         }
 
-        // Step 2: Feed NV12 texture to MFT encoder
+        // Step 2: BGRA → NV12 via video processor
+        unsafe {
+            self.convert_bgra_to_nv12()?;
+        }
+
+        // Step 3: Feed NV12 texture to MFT encoder
         let duration_100ns = 10_000_000i64 / self.config.fps as i64;
         let timestamp_100ns = self.frame_count as i64 * duration_100ns;
         self.frame_count += 1;
@@ -80,11 +111,8 @@ impl EncodePipeline {
         self.encoder.flush()
     }
 
-    unsafe fn convert_bgra_to_nv12(
-        &self,
-        bgra_texture: &ID3D11Texture2D,
-    ) -> Result<(), EngineError> {
-        // Create input view
+    unsafe fn convert_bgra_to_nv12(&self) -> Result<(), EngineError> {
+        // Create input view from the reusable BGRA texture
         let input_view_desc = D3D11_VIDEO_PROCESSOR_INPUT_VIEW_DESC {
             FourCC: 0,
             ViewDimension: D3D11_VPIV_DIMENSION_TEXTURE2D,
@@ -97,7 +125,7 @@ impl EncodePipeline {
         };
         let mut input_view: Option<ID3D11VideoProcessorInputView> = None;
         self.video_device.CreateVideoProcessorInputView(
-            bgra_texture,
+            &self.bgra_texture,
             &self.enumerator,
             &input_view_desc,
             Some(&mut input_view),
@@ -120,8 +148,9 @@ impl EncodePipeline {
         )?;
         let output_view = output_view.ok_or(EngineError::Encode("No output view".into()))?;
 
-        // Configure stream
-        let stream = D3D11_VIDEO_PROCESSOR_STREAM {
+        // Configure stream — ManuallyDrop is required by the Windows API struct.
+        // We use a mutable array so we can release the COM references after the Blt.
+        let mut streams = [D3D11_VIDEO_PROCESSOR_STREAM {
             Enable: true.into(),
             OutputIndex: 0,
             InputFrameOrField: 0,
@@ -133,17 +162,53 @@ impl EncodePipeline {
             ppPastSurfacesRight: std::ptr::null_mut(),
             pInputSurfaceRight: ManuallyDrop::new(None),
             ppFutureSurfacesRight: std::ptr::null_mut(),
-        };
+        }];
 
-        self.video_context.VideoProcessorBlt(
+        let result = self.video_context.VideoProcessorBlt(
             &self.video_processor,
             &output_view,
             0,
-            &[stream],
-        )?;
+            &streams,
+        );
 
+        // Release the COM references held by ManuallyDrop to prevent leaks.
+        // Without this, the input view (and its reference to the BGRA texture)
+        // would leak every frame, accumulating GPU memory until the system freezes.
+        ManuallyDrop::drop(&mut streams[0].pInputSurface);
+
+        result?;
         Ok(())
     }
+}
+
+/// Create a reusable BGRA texture for uploading frame data via UpdateSubresource.
+fn create_bgra_staging_texture(
+    device: &ID3D11Device,
+    width: u32,
+    height: u32,
+) -> Result<ID3D11Texture2D, EngineError> {
+    let desc = D3D11_TEXTURE2D_DESC {
+        Width: width,
+        Height: height,
+        MipLevels: 1,
+        ArraySize: 1,
+        Format: DXGI_FORMAT_B8G8R8A8_UNORM,
+        SampleDesc: DXGI_SAMPLE_DESC {
+            Count: 1,
+            Quality: 0,
+        },
+        Usage: D3D11_USAGE_DEFAULT,
+        BindFlags: D3D11_BIND_RENDER_TARGET.0 as u32,
+        CPUAccessFlags: 0,
+        MiscFlags: 0,
+    };
+    let mut texture = None;
+    unsafe {
+        device
+            .CreateTexture2D(&desc, None, Some(&mut texture))
+            .map_err(|e| EngineError::Encode(format!("BGRA texture: {e}")))?;
+    }
+    texture.ok_or_else(|| EngineError::Encode("No BGRA texture".into()))
 }
 
 unsafe fn create_video_processor(
