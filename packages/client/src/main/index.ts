@@ -19,11 +19,11 @@ function loadAudioCapture(): AudioCaptureAddon | null {
   addonLoadAttempted = true;
   if (process.platform !== "win32") return null;
   try {
-    // In production, asarUnpack puts .node files in app.asar.unpacked/
-    const appPath = app.isPackaged
-      ? app.getAppPath().replace("app.asar", "app.asar.unpacked")
-      : app.getAppPath();
-    const addonPath = join(appPath, "build", "Release", "audio_capture.node");
+    // In production, extraResources places the .node file in resources/
+    // In dev, it's at the project root build/Release/
+    const addonPath = app.isPackaged
+      ? join(process.resourcesPath, "audio_capture.node")
+      : join(app.getAppPath(), "build", "Release", "audio_capture.node");
     const mod = { exports: {} as AudioCaptureAddon };
     process.dlopen(mod, addonPath);
     audioCapture = mod.exports;
