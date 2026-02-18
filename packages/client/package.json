@@ -9,7 +9,7 @@
     "build": "electron-vite build",
     "preview": "electron-vite preview",
     "rebuild": "node-gyp rebuild",
-    "postinstall": "node-gyp rebuild",
+    "postinstall": "node-gyp rebuild || true",
     "test": "vitest run",
     "test:watch": "vitest"
   },
