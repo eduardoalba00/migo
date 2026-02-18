@@ -26,10 +26,22 @@ export const useServerStore = create<ServerState>()((set, get) => ({
   activeServerId: null,
 
   fetchServers: async () => {
-    const servers = await api.get<Server[]>(SERVER_ROUTES.LIST);
-    const lastServerId = localStorage.getItem(getStorageKey());
-    const restored = lastServerId && servers.some((s) => s.id === lastServerId) ? lastServerId : null;
-    set({ servers, activeServerId: restored });
+    try {
+      const servers = await api.get<Server[]>(SERVER_ROUTES.LIST);
+      const current = get().activeServerId;
+      if (current) {
+        // Keep current selection if it still exists, otherwise clear it
+        const stillExists = servers.some((s) => s.id === current);
+        set({ servers, activeServerId: stillExists ? current : null });
+      } else {
+        // Restore from localStorage only when no server is selected
+        const lastServerId = localStorage.getItem(getStorageKey());
+        const restored = lastServerId && servers.some((s) => s.id === lastServerId) ? lastServerId : null;
+        set({ servers, activeServerId: restored });
+      }
+    } catch {
+      // Token may be expired; WS reconnect will retry
+    }
   },
 
   createServer: async (name) => {

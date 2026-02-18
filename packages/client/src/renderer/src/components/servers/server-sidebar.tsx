@@ -19,7 +19,6 @@ export function ServerSidebar() {
   const servers = useServerStore((s) => s.servers);
   const activeServerId = useServerStore((s) => s.activeServerId);
   const setActiveServer = useServerStore((s) => s.setActiveServer);
-  const fetchChannels = useChannelStore((s) => s.fetchChannels);
   const clearChannels = useChannelStore((s) => s.clearChannels);
   const setActiveChannel = useChannelStore((s) => s.setActiveChannel);
 
@@ -31,13 +30,12 @@ export function ServerSidebar() {
 
   const isDmMode = !activeServerId;
 
-  const handleServerClick = async (serverId: string) => {
+  const handleServerClick = (serverId: string) => {
     if (serverId === activeServerId) return;
     setActiveDm(null);
     setActiveServer(serverId);
     setActiveChannel(null);
     clearChannels();
-    await fetchChannels(serverId);
   };
 
   const handleDmsClick = () => {

@@ -9,14 +9,20 @@ export function AppShell() {
   const tokens = useAuthStore((s) => s.tokens);
   const connect = useWsStore((s) => s.connect);
   const disconnect = useWsStore((s) => s.disconnect);
+  const connected = useWsStore((s) => s.connected);
 
   useEffect(() => {
-    fetchServers();
+    if (connected) {
+      fetchServers();
+    }
+  }, [connected, fetchServers]);
+
+  useEffect(() => {
     // Request notification permission
     if ("Notification" in window && Notification.permission === "default") {
       Notification.requestPermission().catch(() => {});
     }
-  }, [fetchServers]);
+  }, []);
 
   useEffect(() => {
     if (tokens?.accessToken) {

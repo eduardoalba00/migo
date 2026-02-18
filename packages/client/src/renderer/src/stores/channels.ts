@@ -2,6 +2,7 @@ import { create } from "zustand";
 import type { ServerChannelList, Channel, Category } from "@migo/shared";
 import { SERVER_ROUTES, READ_STATE_ROUTES, buildRoute } from "@migo/shared";
 import { api } from "@/lib/api";
+import { useServerStore } from "./servers";
 
 interface ChannelState {
   channelList: ServerChannelList | null;
@@ -71,7 +72,14 @@ export const useChannelStore = create<ChannelState>()((set, get) => ({
 
   handleChannelCreate: (channel) => {
     set((s) => {
-      if (!s.channelList) return s;
+      if (!s.channelList) {
+        // Channel list not loaded yet — refetch if this is for the active server
+        const activeServerId = useServerStore.getState().activeServerId;
+        if (activeServerId === channel.serverId) {
+          get().fetchChannels(activeServerId);
+        }
+        return s;
+      }
       const list = { ...s.channelList };
       if (channel.categoryId) {
         list.categories = list.categories.map((cat) =>
@@ -88,7 +96,13 @@ export const useChannelStore = create<ChannelState>()((set, get) => ({
 
   handleChannelUpdate: (channel) => {
     set((s) => {
-      if (!s.channelList) return s;
+      if (!s.channelList) {
+        const activeServerId = useServerStore.getState().activeServerId;
+        if (activeServerId === channel.serverId) {
+          get().fetchChannels(activeServerId);
+        }
+        return s;
+      }
       const updateInList = (channels: Channel[]) =>
         channels.map((ch) => (ch.id === channel.id ? channel : ch));
       return {
@@ -105,7 +119,13 @@ export const useChannelStore = create<ChannelState>()((set, get) => ({
 
   handleChannelDelete: (data) => {
     set((s) => {
-      if (!s.channelList) return s;
+      if (!s.channelList) {
+        const activeServerId = useServerStore.getState().activeServerId;
+        if (activeServerId === data.serverId) {
+          get().fetchChannels(activeServerId);
+        }
+        return s;
+      }
       const filterOut = (channels: Channel[]) =>
         channels.filter((ch) => ch.id !== data.id);
       return {

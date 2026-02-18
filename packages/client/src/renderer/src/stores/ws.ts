@@ -6,7 +6,7 @@ import { playMessageSound, playMentionSound } from "@/lib/sounds";
 import { useAuthStore } from "./auth";
 import { useChannelStore } from "./channels";
 import { useMessageStore } from "./messages";
-import { useServerStore } from "./servers";
+
 import { useVoiceStore } from "./voice";
 import { useMemberStore } from "./members";
 import { useDmStore } from "./dms";
@@ -77,7 +77,6 @@ export const useWsStore = create<WsState>()((set) => ({
           useChannelStore.getState().handleChannelDelete(event.d as { id: string; serverId: string });
           break;
         case DispatchEvent.MEMBER_JOIN:
-          useServerStore.getState().fetchServers();
           useMemberStore.getState().handleMemberJoin(event.d as ServerMember);
           break;
         case DispatchEvent.MEMBER_LEAVE:
