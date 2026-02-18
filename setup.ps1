@@ -43,6 +43,15 @@ if (Test-Path $EnvFile) {
         }
     }
 
+    # LiveKit Cloud credentials
+    Write-Host
+    Write-Host "Migo uses LiveKit Cloud for voice and screen sharing." -ForegroundColor Cyan
+    Write-Host "Create a free project at https://cloud.livekit.io"
+    Write-Host
+    $LivekitUrl = Read-Host "LiveKit URL (e.g. wss://your-project.livekit.cloud)"
+    $LivekitApiKey = Read-Host "LiveKit API Key"
+    $LivekitApiSecret = Read-Host "LiveKit API Secret"
+
     # Generate secrets using .NET RNG (works on both .NET Framework and .NET 6+)
     $rng = [System.Security.Cryptography.RNGCryptoServiceProvider]::new()
 
@@ -52,17 +61,9 @@ if (Test-Path $EnvFile) {
         return ($bytes | ForEach-Object { $_.ToString("x2") }) -join ""
     }
 
-    function New-ShortSecret {
-        $bytes = New-Object byte[] 4
-        $rng.GetBytes($bytes)
-        return ($bytes | ForEach-Object { $_.ToString("x2") }) -join ""
-    }
-
     $PostgresPassword = New-Secret
     $JwtAccessSecret = New-Secret
     $JwtRefreshSecret = New-Secret
-    $LivekitApiKey = "migo$(New-ShortSecret)"
-    $LivekitApiSecret = New-Secret
 
     # Write env file
     $date = (Get-Date).ToUniversalTime().ToString("yyyy-MM-dd")
@@ -78,10 +79,10 @@ POSTGRES_DB=migo
 JWT_ACCESS_SECRET=$JwtAccessSecret
 JWT_REFRESH_SECRET=$JwtRefreshSecret
 
-# LiveKit
+# LiveKit Cloud
+LIVEKIT_URL=$LivekitUrl
 LIVEKIT_API_KEY=$LivekitApiKey
 LIVEKIT_API_SECRET=$LivekitApiSecret
-LIVEKIT_PUBLIC_URL=ws://${PublicIP}:7880
 "@ | Set-Content -Path $EnvFile -NoNewline
 
     Write-Host
@@ -90,9 +91,7 @@ LIVEKIT_PUBLIC_URL=ws://${PublicIP}:7880
 
 Write-Host
 Write-Host "Required ports (open these on your firewall):" -ForegroundColor Yellow
-Write-Host "  8080        TCP      - Migo API + WebSocket"
-Write-Host "  7880-7881   TCP      - LiveKit signaling"
-Write-Host "  50000-50100 UDP      - Voice + Screen Share (LiveKit WebRTC)"
+Write-Host "  8080   TCP   - Migo API + WebSocket"
 Write-Host
 
 $start = Read-Host "Start Migo now? (Y/n)"

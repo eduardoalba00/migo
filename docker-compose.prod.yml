@@ -16,24 +16,6 @@ services:
       timeout: 5s
       retries: 5
 
-  livekit:
-    image: livekit/livekit-server
-    restart: unless-stopped
-    ports:
-      - "7880:7880"
-      - "7881:7881"
-      - "50000-50100:50000-50100/udp"
-    environment:
-      LIVEKIT_CONFIG: |
-        port: 7880
-        rtc:
-          tcp_port: 7881
-          port_range_start: 50000
-          port_range_end: 50100
-          use_external_ip: true
-        keys:
-          ${LIVEKIT_API_KEY}: ${LIVEKIT_API_SECRET}
-
   server:
     image: ghcr.io/eduardoalba00/migo-server:latest
     restart: unless-stopped
@@ -42,15 +24,12 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      livekit:
-        condition: service_started
     environment:
       PORT: "8080"
       DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET}
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
-      LIVEKIT_URL: ws://livekit:7880
-      LIVEKIT_PUBLIC_URL: ${LIVEKIT_PUBLIC_URL}
+      LIVEKIT_URL: ${LIVEKIT_URL}
       LIVEKIT_API_KEY: ${LIVEKIT_API_KEY}
       LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET}
       UPLOAD_DIR: /data/uploads

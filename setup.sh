@@ -41,14 +41,21 @@ else
     fi
   fi
 
+  # LiveKit Cloud credentials
+  echo
+  echo "Migo uses LiveKit Cloud for voice and screen sharing."
+  echo "Create a free project at https://cloud.livekit.io"
+  echo
+  read -rp "LiveKit URL (e.g. wss://your-project.livekit.cloud): " LIVEKIT_URL
+  read -rp "LiveKit API Key: " LIVEKIT_API_KEY
+  read -rp "LiveKit API Secret: " LIVEKIT_API_SECRET
+
   # Generate secrets
   gen_secret() { openssl rand -hex 32; }
 
   POSTGRES_PASSWORD=$(gen_secret)
   JWT_ACCESS_SECRET=$(gen_secret)
   JWT_REFRESH_SECRET=$(gen_secret)
-  LIVEKIT_API_KEY="migo$(openssl rand -hex 4)"
-  LIVEKIT_API_SECRET=$(gen_secret)
 
   # Write env file
   cat > "$ENV_FILE" <<EOF
@@ -63,10 +70,10 @@ POSTGRES_DB=migo
 JWT_ACCESS_SECRET=$JWT_ACCESS_SECRET
 JWT_REFRESH_SECRET=$JWT_REFRESH_SECRET
 
-# LiveKit
+# LiveKit Cloud
+LIVEKIT_URL=$LIVEKIT_URL
 LIVEKIT_API_KEY=$LIVEKIT_API_KEY
 LIVEKIT_API_SECRET=$LIVEKIT_API_SECRET
-LIVEKIT_PUBLIC_URL=ws://$PUBLIC_IP:7880
 EOF
 
   echo
@@ -75,9 +82,7 @@ fi
 
 echo
 echo "Required ports (open these on your firewall):"
-echo "  8080        TCP   — Migo API + WebSocket"
-echo "  7880-7881   TCP   — LiveKit signaling"
-echo "  50000-50100 UDP   — Voice + Screen Share (LiveKit WebRTC)"
+echo "  8080   TCP   — Migo API + WebSocket"
 echo
 
 read -rp "Start Migo now? (Y/n): " start
