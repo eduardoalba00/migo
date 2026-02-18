@@ -119,8 +119,8 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
       const data = await api.get<{ user: User }>(AUTH_ROUTES.ME);
       set({ user: data.user });
     } catch (e) {
-      if (e instanceof ApiError && e.status === 401) {
-        // Try refresh
+      if (e instanceof ApiError && (e.status === 401 || e.status === 404)) {
+        // 401 = expired token, 404 = user deleted — try refresh, which logs out on failure
         await get().refresh();
       }
     }
