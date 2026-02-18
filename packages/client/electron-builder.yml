@@ -22,13 +22,6 @@ nsis:
   shortcutName: ${productName}
   uninstallDisplayName: ${productName}
   createDesktopShortcut: always
-mac:
-  target:
-    - target: dmg
-      arch:
-        - x64
-        - arm64
-  artifactName: ${productName}-${version}-${arch}.${ext}
 publish:
   provider: github
   owner: eduardoalba00
