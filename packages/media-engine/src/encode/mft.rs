@@ -45,6 +45,13 @@ impl MftEncoder {
         let (transform, device_manager, reset_token, is_async, uses_d3d) =
             unsafe { create_encoder(device, &config)? };
 
+        tracing::info!(
+            "H.264 encoder: {} (async={}, d3d={})",
+            if is_async { "hardware (NVENC/AMF/QSV)" } else { "software" },
+            is_async,
+            uses_d3d,
+        );
+
         let event_gen = if is_async {
             transform.cast::<IMFMediaEventGenerator>().ok()
         } else {
@@ -327,11 +334,11 @@ unsafe fn create_encoder(
         guidSubtype: MFVideoFormat_H264,
     };
 
-    // Two-pass enumeration: sync first (simpler, no async unlock needed), then hardware async
+    // Enumeration order: hardware async first (NVENC/AMF/QSV), then software sync fallback
     let flag_sets = if config.prefer_hardware {
         vec![
-            MFT_ENUM_FLAG_SYNCMFT | MFT_ENUM_FLAG_SORTANDFILTER,
             MFT_ENUM_FLAG_HARDWARE | MFT_ENUM_FLAG_ASYNCMFT | MFT_ENUM_FLAG_SORTANDFILTER,
+            MFT_ENUM_FLAG_SYNCMFT | MFT_ENUM_FLAG_SORTANDFILTER,
         ]
     } else {
         vec![MFT_ENUM_FLAG_SYNCMFT | MFT_ENUM_FLAG_SORTANDFILTER]
@@ -357,23 +364,27 @@ unsafe fn create_encoder(
         }
 
         let activates = std::slice::from_raw_parts(activates_ptr, count as usize);
+        let mut used_index: Option<usize> = None;
 
         for i in 0..count as usize {
             if let Some(activate) = &activates[i] {
-                // For async MFTs, set unlock on activate before ActivateObject
-                let _ = activate.SetUINT32(&MF_TRANSFORM_ASYNC_UNLOCK, 1);
                 match activate.ActivateObject::<IMFTransform>() {
                     Ok(t) => {
-                        // Detect if this is an async MFT
+                        // Detect if this is an async MFT and unlock it
                         let detected_async = if let Ok(attrs) = t.GetAttributes() {
-                            // Also set async unlock on the transform itself
-                            let _ = attrs.SetUINT32(&MF_TRANSFORM_ASYNC_UNLOCK, 1);
-                            attrs.GetUINT32(&MF_TRANSFORM_ASYNC).unwrap_or(0) != 0
+                            let is_async_mft = attrs.GetUINT32(&MF_TRANSFORM_ASYNC).unwrap_or(0) != 0;
+                            if is_async_mft {
+                                // Unlock the async MFT — MUST be done before any configuration
+                                attrs.SetUINT32(&MF_TRANSFORM_ASYNC_UNLOCK, 1)
+                                    .map_err(|e| tracing::error!("Async unlock failed: {e}")).ok();
+                            }
+                            is_async_mft
                         } else {
                             false
                         };
                         is_async = detected_async;
                         transform = Some(t);
+                        used_index = Some(i);
                         break;
                     }
                     Err(_) => continue,
@@ -381,10 +392,12 @@ unsafe fn create_encoder(
             }
         }
 
-        // Release all activates
+        // Release unused activates (don't shutdown the one backing our transform)
         for i in 0..count as usize {
-            if let Some(a) = &activates[i] {
-                let _ = a.ShutdownObject();
+            if Some(i) != used_index {
+                if let Some(a) = &activates[i] {
+                    let _ = a.ShutdownObject();
+                }
             }
         }
         windows::Win32::System::Com::CoTaskMemFree(Some(activates_ptr as *const _));

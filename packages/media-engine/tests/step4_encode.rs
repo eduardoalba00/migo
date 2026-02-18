@@ -110,10 +110,9 @@ fn create_bgra_texture(
         MiscFlags: 0,
     };
 
-    let row_pitch = frame.width * 4;
     let init_data = D3D11_SUBRESOURCE_DATA {
         pSysMem: frame.data.as_ptr() as *const _,
-        SysMemPitch: row_pitch,
+        SysMemPitch: frame.row_pitch,
         SysMemSlicePitch: 0,
     };
 

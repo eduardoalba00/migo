@@ -21,6 +21,8 @@ pub struct CapturedFrame {
     pub data: Vec<u8>,
     pub width: u32,
     pub height: u32,
+    /// GPU row pitch in bytes (may be larger than width * 4 due to alignment).
+    pub row_pitch: u32,
     /// Timestamp in 100-nanosecond units.
     pub timestamp: i64,
 }
@@ -144,12 +146,14 @@ impl GraphicsCaptureApiHandler for CaptureHandler {
         let timestamp = ts.Duration;
 
         let mut buffer = frame.buffer().map_err(|e| e.to_string())?;
+        let row_pitch = buffer.row_pitch();
         let data = buffer.as_raw_buffer().to_vec();
 
         let captured = CapturedFrame {
             data,
             width,
             height,
+            row_pitch,
             timestamp,
         };
 

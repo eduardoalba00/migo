@@ -367,7 +367,7 @@ fn create_bgra_texture(
 
     let init_data = D3D11_SUBRESOURCE_DATA {
         pSysMem: frame.data.as_ptr() as *const _,
-        SysMemPitch: frame.width * 4,
+        SysMemPitch: frame.row_pitch,
         SysMemSlicePitch: 0,
     };
 
