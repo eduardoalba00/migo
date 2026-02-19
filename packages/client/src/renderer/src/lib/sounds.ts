@@ -27,41 +27,41 @@ function play(key: string, path: string, volumeScale = 1) {
 }
 
 export function playJoinSound() {
-  play("join", "/sounds/join_channel.wav");
+  play("join", "./sounds/join_channel.wav");
 }
 
 export function playLeaveSound() {
-  play("leave", "/sounds/leave_channel.wav");
+  play("leave", "./sounds/leave_channel.wav");
 }
 
 export function playMuteSound() {
-  play("mute", "/sounds/mute.wav");
+  play("mute", "./sounds/mute.wav");
 }
 
 export function playUnmuteSound() {
-  play("unmute", "/sounds/unmute.wav");
+  play("unmute", "./sounds/unmute.wav");
 }
 
 export function playDeafenSound() {
-  play("deafen", "/sounds/deafen.wav");
+  play("deafen", "./sounds/deafen.wav");
 }
 
 export function playUndeafenSound() {
-  play("undeafen", "/sounds/undeafen.wav");
+  play("undeafen", "./sounds/undeafen.wav");
 }
 
 export function playScreenShareStartSound() {
-  play("screen-share-start", "/sounds/start_stream.wav");
+  play("screen-share-start", "./sounds/start_stream.wav");
 }
 
 export function playScreenShareStopSound() {
-  play("screen-share-stop", "/sounds/end_stream.wav");
+  play("screen-share-stop", "./sounds/end_stream.wav");
 }
 
 export function playMessageSound() {
-  play("message", "/sounds/join_channel.wav", 0.5);
+  play("message", "./sounds/join_channel.wav", 0.5);
 }
 
 export function playMentionSound() {
-  play("mention", "/sounds/join_channel.wav");
+  play("mention", "./sounds/join_channel.wav");
 }
