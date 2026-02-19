@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useServerStore } from "@/stores/servers";
 import { useAuthStore } from "@/stores/auth";
 import { useWsStore } from "@/stores/ws";
@@ -38,14 +38,21 @@ export function AppShell() {
     }
   }, []);
 
+  // Keep the latest token in a ref so the WS connect effect doesn't re-run on
+  // every token refresh (which would needlessly disconnect/reconnect the WS).
+  // The effect only reacts to whether we have a token at all (login/logout).
+  const tokenRef = useRef(tokens?.accessToken);
+  tokenRef.current = tokens?.accessToken;
+  const isAuthenticated = !!tokens?.accessToken;
+
   useEffect(() => {
-    if (tokens?.accessToken) {
-      connect(tokens.accessToken);
+    if (isAuthenticated && tokenRef.current) {
+      connect(tokenRef.current);
     }
     return () => {
       disconnect();
     };
-  }, [tokens?.accessToken, connect, disconnect]);
+  }, [isAuthenticated, connect, disconnect]);
 
   return <AppLayout />;
 }

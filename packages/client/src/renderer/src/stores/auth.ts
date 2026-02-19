@@ -96,9 +96,17 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
     if (!tokens?.refreshToken) return;
 
     try {
-      const data = await api.post<AuthResponse>(AUTH_ROUTES.REFRESH, {
-        refreshToken: tokens.refreshToken,
-      });
+      // Call fetch directly to avoid the 401-retry interceptor on the refresh call itself
+      const response = await fetch(
+        `${api.getBaseUrl()}${AUTH_ROUTES.REFRESH}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ refreshToken: tokens.refreshToken }),
+        },
+      );
+      if (!response.ok) throw new Error("Refresh failed");
+      const data: AuthResponse = await response.json();
       api.setAccessToken(data.tokens.accessToken);
       set({ user: data.user, tokens: data.tokens });
       persistAuth(data.tokens, data.user);
@@ -152,6 +160,17 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
     set({ user: null, tokens: null, error: null, isLoading: false });
   },
 }));
+
+// Register auto-refresh handler so the API client can transparently refresh on 401
+api.setRefreshHandler(async () => {
+  const { tokens } = useAuthStore.getState();
+  if (!tokens?.refreshToken) return false;
+
+  await useAuthStore.getState().refresh();
+
+  // Check if refresh succeeded (tokens updated) or failed (logged out)
+  return useAuthStore.getState().tokens !== null;
+});
 
 // One-time migration: if old "migo-auth" key exists and no workspaces yet, create a default workspace
 (function migrateOldAuth() {

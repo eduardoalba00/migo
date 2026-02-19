@@ -33,6 +33,11 @@ export const useWsStore = create<WsState>()((set) => ({
       set({ versionMismatch: true, connected: false });
     });
 
+    wsManager.setTokenRefresher(async () => {
+      await useAuthStore.getState().refresh();
+      return useAuthStore.getState().tokens?.accessToken ?? null;
+    });
+
     wsManager.setDispatchHandler((event: WsDispatch) => {
       switch (event.t) {
         case DispatchEvent.MESSAGE_CREATE: {

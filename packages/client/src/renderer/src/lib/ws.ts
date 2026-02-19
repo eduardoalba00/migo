@@ -16,6 +16,7 @@ export class WebSocketManager {
   private voiceSignalHandler: VoiceSignalHandler | null = null;
   private onStatusChange: ((connected: boolean) => void) | null = null;
   private onVersionMismatch: (() => void) | null = null;
+  private tokenRefresher: (() => Promise<string | null>) | null = null;
   private intentionalClose = false;
 
   setUrl(url: string) {
@@ -25,6 +26,12 @@ export class WebSocketManager {
   connect(token: string) {
     this.token = token;
     this.intentionalClose = false;
+
+    // Already connected — just update the stored token for future reconnects
+    if (this.ws?.readyState === WebSocket.OPEN || this.ws?.readyState === WebSocket.CONNECTING) {
+      return;
+    }
+
     this.reconnectAttempts = 0;
     this.doConnect();
   }
@@ -48,6 +55,11 @@ export class WebSocketManager {
 
   setVersionMismatchHandler(handler: () => void) {
     this.onVersionMismatch = handler;
+  }
+
+  /** Register a callback that refreshes auth and returns the new access token (or null on failure) */
+  setTokenRefresher(handler: () => Promise<string | null>) {
+    this.tokenRefresher = handler;
   }
 
   send(data: unknown) {
@@ -151,7 +163,17 @@ export class WebSocketManager {
     const delay = Math.min(1000 * 2 ** this.reconnectAttempts, 30_000);
     this.reconnectAttempts++;
 
-    this.reconnectTimeout = setTimeout(() => {
+    this.reconnectTimeout = setTimeout(async () => {
+      // Refresh token before reconnecting so we don't send an expired one
+      if (this.tokenRefresher) {
+        const newToken = await this.tokenRefresher();
+        if (newToken) {
+          this.token = newToken;
+        } else {
+          // Refresh failed (user logged out) — stop reconnecting
+          return;
+        }
+      }
       this.doConnect();
     }, delay);
   }

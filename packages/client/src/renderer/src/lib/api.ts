@@ -1,6 +1,8 @@
 export class ApiClient {
   private accessToken: string | null = null;
   private baseUrl: string = "http://localhost:3000";
+  private refreshHandler: (() => Promise<boolean>) | null = null;
+  private refreshPromise: Promise<boolean> | null = null;
 
   setBaseUrl(url: string) {
     this.baseUrl = url.replace(/\/+$/, "");
@@ -14,7 +16,23 @@ export class ApiClient {
     this.accessToken = token;
   }
 
-  async fetch<T>(path: string, options: RequestInit = {}): Promise<T> {
+  /** Register a callback that refreshes tokens and returns true on success */
+  setRefreshHandler(handler: (() => Promise<boolean>) | null) {
+    this.refreshHandler = handler;
+  }
+
+  private async tryRefresh(): Promise<boolean> {
+    if (!this.refreshHandler) return false;
+    // Deduplicate concurrent refresh attempts
+    if (!this.refreshPromise) {
+      this.refreshPromise = this.refreshHandler().finally(() => {
+        this.refreshPromise = null;
+      });
+    }
+    return this.refreshPromise;
+  }
+
+  async fetch<T>(path: string, options: RequestInit = {}, _isRetry = false): Promise<T> {
     const headers: Record<string, string> = {
       ...((options.headers as Record<string, string>) || {}),
     };
@@ -34,6 +52,13 @@ export class ApiClient {
     });
 
     if (!response.ok) {
+      // On 401, try refreshing the token and retry once
+      if (response.status === 401 && !_isRetry) {
+        const refreshed = await this.tryRefresh();
+        if (refreshed) {
+          return this.fetch<T>(path, options, true);
+        }
+      }
       const body = await response.json().catch(() => ({}));
       throw new ApiError(response.status, body.error || "Request failed");
     }
@@ -72,7 +97,7 @@ export class ApiClient {
     return this.fetch<T>(path, { method: "DELETE" });
   }
 
-  async upload<T>(path: string, formData: FormData): Promise<T> {
+  async upload<T>(path: string, formData: FormData, _isRetry = false): Promise<T> {
     const headers: Record<string, string> = {};
 
     if (this.accessToken) {
@@ -86,6 +111,12 @@ export class ApiClient {
     });
 
     if (!response.ok) {
+      if (response.status === 401 && !_isRetry) {
+        const refreshed = await this.tryRefresh();
+        if (refreshed) {
+          return this.upload<T>(path, formData, true);
+        }
+      }
       const body = await response.json().catch(() => ({}));
       throw new ApiError(response.status, body.error || "Upload failed");
     }
