@@ -83,7 +83,7 @@ function ScreenShareTile({ track, sharerName, onClick, showClickHint }: ScreenSh
 
   return (
     <div
-      className={`relative bg-black flex items-center justify-center overflow-hidden ${
+      className={`relative bg-black flex items-center justify-center overflow-hidden min-h-0 ${
         onClick ? "cursor-pointer hover:ring-2 hover:ring-primary/50 transition-shadow" : ""
       }`}
       onClick={onClick}
@@ -93,7 +93,7 @@ function ScreenShareTile({ track, sharerName, onClick, showClickHint }: ScreenSh
         autoPlay
         muted
         playsInline
-        className="w-full h-full object-contain"
+        className="max-w-full max-h-full object-contain"
       />
       <div className="absolute top-2 left-2 bg-black/60 text-white text-xs font-medium px-2 py-1 rounded">
         {sharerName}
@@ -154,7 +154,7 @@ function FocusedView({
   return (
     <div
       ref={containerRef}
-      className="relative flex-1 bg-black flex items-center justify-center"
+      className="relative flex-1 min-h-0 bg-black flex items-center justify-center"
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
@@ -308,7 +308,7 @@ export function ScreenShareViewer({ tracks, getUserName }: ScreenShareViewerProp
       : "grid-cols-2 grid-rows-2";
 
   return (
-    <div ref={containerRef} className={`flex-1 grid ${gridClass} gap-1 bg-zinc-900 p-1`}>
+    <div ref={containerRef} className={`flex-1 min-h-0 grid ${gridClass} gap-1 bg-zinc-900 p-1`}>
       {userIds.map((userId) => (
         <ScreenShareTile
           key={userId}
