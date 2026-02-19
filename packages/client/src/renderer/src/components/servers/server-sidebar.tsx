@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/tooltip";
 import { CreateServerDialog } from "@/components/servers/create-server-dialog";
 import { JoinServerDialog } from "@/components/servers/join-server-dialog";
+import { AddServerDialog } from "@/components/servers/add-server-dialog";
 import { resolveUploadUrl } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
@@ -25,8 +26,8 @@ export function ServerSidebar() {
   const setActiveWorkspace = useWorkspaceStore((s) => s.setActiveWorkspace);
   const setActiveDm = useDmStore((s) => s.setActiveDm);
 
-  const [showCreate, setShowCreate] = useState(false);
-  const [showJoin, setShowJoin] = useState(false);
+  const [showAddServer, setShowAddServer] = useState(false);
+  const [addServerMode, setAddServerMode] = useState<"pick" | "create" | "join">("pick");
 
   const isDmMode = !activeServerId;
 
@@ -118,28 +119,14 @@ export function ServerSidebar() {
           <TooltipTrigger asChild>
             <div className="group relative flex items-center justify-center w-full">
               <button
-                onClick={() => setShowCreate(true)}
+                onClick={() => { setAddServerMode("pick"); setShowAddServer(true); }}
                 className="h-[42px] w-[42px] rounded-[12px] bg-card flex items-center justify-center text-primary transition-all hover:rounded-[8px] hover:bg-primary hover:text-primary-foreground"
               >
                 <Plus className="h-6 w-6" />
               </button>
             </div>
           </TooltipTrigger>
-          <TooltipContent side="right">Create a server</TooltipContent>
-        </Tooltip>
-
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <div className="group relative flex items-center justify-center w-full">
-              <button
-                onClick={() => setShowJoin(true)}
-                className="h-[42px] w-[42px] rounded-[12px] bg-card flex items-center justify-center text-primary transition-all hover:rounded-[8px] hover:bg-primary hover:text-primary-foreground text-sm font-bold"
-              >
-                Join
-              </button>
-            </div>
-          </TooltipTrigger>
-          <TooltipContent side="right">Join a server</TooltipContent>
+          <TooltipContent side="right">Add a server</TooltipContent>
         </Tooltip>
 
         <div className="mt-auto" />
@@ -159,8 +146,22 @@ export function ServerSidebar() {
         </Tooltip>
       </div>
 
-      <CreateServerDialog open={showCreate} onOpenChange={setShowCreate} />
-      <JoinServerDialog open={showJoin} onOpenChange={setShowJoin} />
+      <CreateServerDialog
+        open={showAddServer && addServerMode === "create"}
+        onOpenChange={(open) => { if (!open) setShowAddServer(false); }}
+        onBack={() => setAddServerMode("pick")}
+      />
+      <JoinServerDialog
+        open={showAddServer && addServerMode === "join"}
+        onOpenChange={(open) => { if (!open) setShowAddServer(false); }}
+        onBack={() => setAddServerMode("pick")}
+      />
+      <AddServerDialog
+        open={showAddServer && addServerMode === "pick"}
+        onOpenChange={(open) => { if (!open) setShowAddServer(false); }}
+        onCreateServer={() => setAddServerMode("create")}
+        onJoinServer={() => setAddServerMode("join")}
+      />
     </>
   );
 }

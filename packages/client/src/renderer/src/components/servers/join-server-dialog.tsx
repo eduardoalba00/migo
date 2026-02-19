@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -15,9 +16,10 @@ import { useServerStore } from "@/stores/servers";
 interface JoinServerDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onBack?: () => void;
 }
 
-export function JoinServerDialog({ open, onOpenChange }: JoinServerDialogProps) {
+export function JoinServerDialog({ open, onOpenChange, onBack }: JoinServerDialogProps) {
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
   const joinServer = useServerStore((s) => s.joinServer);
@@ -44,7 +46,15 @@ export function JoinServerDialog({ open, onOpenChange }: JoinServerDialogProps) 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="p-0 overflow-hidden">
-        <DialogHeader className="pt-6 px-6">
+        <DialogHeader className="pt-6 px-6 relative">
+          {onBack && (
+            <button
+              onClick={onBack}
+              className="absolute left-6 top-6 p-1 text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </button>
+          )}
           <DialogTitle className="text-xl text-center font-bold">Join a server</DialogTitle>
           <DialogDescription className="text-center">
             Enter an invite code to join an existing server.
