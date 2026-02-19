@@ -8,6 +8,8 @@ import {
   playLeaveSound,
   playMuteSound,
   playUnmuteSound,
+  playDeafenSound,
+  playUndeafenSound,
   playScreenShareStartSound,
   playScreenShareStopSound,
 } from "@/lib/sounds";
@@ -338,9 +340,9 @@ export const useVoiceStore = create<VoiceStoreState>()((set, get) => ({
     set({ isDeafened: newDeafened, isMuted: newDeafened });
 
     if (newDeafened) {
-      playMuteSound();
+      playDeafenSound();
     } else {
-      playUnmuteSound();
+      playUndeafenSound();
     }
 
     if (currentChannelId && currentServerId) {
