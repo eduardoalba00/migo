@@ -233,7 +233,7 @@ export function MessageItem({ message, compact }: MessageItemProps) {
   return (
     <>
       <ReplyRef />
-      <div className="relative group flex items-start hover:bg-muted/30 p-4 gap-4">
+      <div className="relative group flex items-start hover:bg-muted/30 pt-3 pb-0.5 px-4 gap-4">
         <div className="w-10 h-10 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-semibold shrink-0 hover:drop-shadow-md">
           {message.author.avatarUrl ? (
             <img src={resolveUploadUrl(message.author.avatarUrl)!} className="w-10 h-10 rounded-full object-cover" alt="" />
