@@ -41,6 +41,12 @@ function parseInline(text: string): string {
     '<span class="migo-spoiler bg-muted-foreground/80 text-transparent hover:bg-transparent hover:text-foreground rounded px-0.5 transition-colors cursor-pointer" onclick="this.classList.toggle(\'revealed\')">$1</span>',
   );
 
+  // Links (https://... or http://...)
+  result = result.replace(
+    /(?<!\w)(https?:\/\/[^\s<]+)/g,
+    '<a href="$1" target="_blank" rel="noopener noreferrer" class="text-primary hover:underline">$1</a>',
+  );
+
   // Block quotes (> ...)
   result = result.replace(
     /^&gt; (.+)$/gm,
