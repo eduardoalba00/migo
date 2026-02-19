@@ -20,6 +20,7 @@ import { VoicePanel } from "@/components/voice/voice-panel";
 import { VoiceUser } from "@/components/voice/voice-user";
 import { UserSettingsModal } from "@/components/settings/user-settings-modal";
 import { ServerSettingsModal } from "@/components/settings/server-settings-modal";
+import { useMemberStore } from "@/stores/members";
 import { cn } from "@/lib/utils";
 import { resolveUploadUrl } from "@/lib/api";
 import type { Channel, CategoryWithChannels } from "@migo/shared";
@@ -49,9 +50,12 @@ export function ChannelSidebar({ serverId }: ChannelSidebarProps) {
   const server = servers.find((s) => s.id === serverId);
   const isOwner = server?.ownerId === user?.id;
 
+  const fetchMembers = useMemberStore((s) => s.fetchMembers);
+
   useEffect(() => {
     fetchChannels(serverId);
-  }, [serverId, fetchChannels]);
+    fetchMembers(serverId);
+  }, [serverId, fetchChannels, fetchMembers]);
 
   const toggleCategory = (catId: string) => {
     setCollapsedCategories((prev) => {

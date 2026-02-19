@@ -42,6 +42,7 @@ interface VoiceStoreState {
   setScreenShareVolume: (userId: string, volume: number) => void;
   toggleScreenShareMute: (userId: string) => void;
 
+  reannounceVoiceState: () => void;
   joinChannel: (channelId: string, serverId: string) => Promise<void>;
   leaveChannel: () => void;
   toggleMute: () => void;
@@ -124,6 +125,22 @@ export const useVoiceStore = create<VoiceStoreState>()((set, get) => ({
         console.error("Failed to toggle noise suppression:", err);
       }
     }
+  },
+
+  reannounceVoiceState: () => {
+    const { currentChannelId, currentServerId, isMuted, isDeafened } = get();
+    if (!currentChannelId || !currentServerId) return;
+
+    // Re-send voice state so the server re-registers us after a reconnect
+    wsManager.send({
+      op: WsOpcode.VOICE_STATE_UPDATE,
+      d: {
+        channelId: currentChannelId,
+        serverId: currentServerId,
+        muted: isMuted,
+        deafened: isDeafened,
+      },
+    });
   },
 
   joinChannel: async (channelId, serverId) => {
