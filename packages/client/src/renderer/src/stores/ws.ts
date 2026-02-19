@@ -1,12 +1,14 @@
 import { create } from "zustand";
 import { DispatchEvent } from "@migo/shared";
 import type { WsDispatch, Message, Channel, DmChannel, ServerMember, MessageDeleteData, MemberLeaveData, VoiceState, TypingStartData, ReactionData, PresenceUpdateData } from "@migo/shared";
+import { toast } from "sonner";
 import { wsManager } from "@/lib/ws";
 import { playMessageSound, playMentionSound } from "@/lib/sounds";
 import { useAuthStore } from "./auth";
 import { useChannelStore } from "./channels";
 import { useMessageStore } from "./messages";
 
+import { useServerStore } from "./servers";
 import { useVoiceStore } from "./voice";
 import { useMemberStore } from "./members";
 import { useDmStore } from "./dms";
@@ -108,6 +110,17 @@ export const useWsStore = create<WsState>()((set) => ({
           useDmStore.getState().handleDmMessageCreate(dmMsg);
           if (dmMsg.author.id !== useAuthStore.getState().user?.id) {
             playMessageSound();
+            toast(`${dmMsg.author.displayName}`, {
+              description: dmMsg.content.slice(0, 100),
+              action: {
+                label: "View",
+                onClick: () => {
+                  useServerStore.getState().setActiveServer(null);
+                  useDmStore.getState().setActiveDm(dmMsg.channelId);
+                  useDmStore.getState().fetchMessages(dmMsg.channelId);
+                },
+              },
+            });
             if (!document.hasFocus()) {
               try {
                 new Notification(`DM from ${dmMsg.author.displayName}`, {

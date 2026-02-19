@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { cn } from "@/lib/utils";
 import { resolveUploadUrl } from "@/lib/api";
 import type { ServerMember, UserStatus } from "@migo/shared";
@@ -18,10 +18,12 @@ const STATUS_COLORS: Record<UserStatus, string> = {
 
 export function MemberItem({ member, status }: MemberItemProps) {
   const [showProfile, setShowProfile] = useState(false);
+  const buttonRef = useRef<HTMLButtonElement>(null);
 
   return (
-    <div className="relative">
+    <div>
       <button
+        ref={buttonRef}
         onClick={() => setShowProfile(!showProfile)}
         className={cn(
           "w-full flex items-center gap-2 px-4 py-1.5 hover:bg-muted/50 transition-colors text-left",
@@ -51,7 +53,11 @@ export function MemberItem({ member, status }: MemberItemProps) {
         </div>
       </button>
       {showProfile && (
-        <UserProfilePopup member={member} onClose={() => setShowProfile(false)} />
+        <UserProfilePopup
+          member={member}
+          anchorRef={buttonRef}
+          onClose={() => setShowProfile(false)}
+        />
       )}
     </div>
   );

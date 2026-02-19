@@ -2,9 +2,8 @@ import type { FastifyInstance } from "fastify";
 import { eq, and, desc } from "drizzle-orm";
 import { DM_ROUTES } from "@migo/shared";
 import type { AppDatabase } from "../db/index.js";
-import { dmChannels, dmMembers } from "../db/schema/dm-channels.js";
+import { dmChannels, dmMembers, dmMessages } from "../db/schema/dm-channels.js";
 import { users } from "../db/schema/users.js";
-import { messages } from "../db/schema/messages.js";
 import type { AuthService } from "../services/auth.js";
 import { createAuthMiddleware } from "../middleware/auth.js";
 import { fastifyRoute } from "../lib/route-utils.js";
@@ -175,27 +174,27 @@ export function dmRoutes(
 
       let msgs = await db
         .select()
-        .from(messages)
-        .innerJoin(users, eq(messages.authorId, users.id))
-        .where(eq(messages.channelId, channelId))
-        .orderBy(desc(messages.createdAt))
+        .from(dmMessages)
+        .innerJoin(users, eq(dmMessages.authorId, users.id))
+        .where(eq(dmMessages.channelId, channelId))
+        .orderBy(desc(dmMessages.createdAt))
         .limit(limit)
         ;
 
       if (query.before) {
-        const beforeMsg = await db.select().from(messages).where(eq(messages.id, query.before)).then(r => r[0]);
+        const beforeMsg = await db.select().from(dmMessages).where(eq(dmMessages.id, query.before)).then(r => r[0]);
         if (beforeMsg) {
-          msgs = msgs.filter((m) => m.messages.createdAt < beforeMsg.createdAt);
+          msgs = msgs.filter((m) => m.dm_messages.createdAt < beforeMsg.createdAt);
         }
       }
 
       const result = msgs.map((row) => ({
-        id: row.messages.id,
-        channelId: row.messages.channelId,
+        id: row.dm_messages.id,
+        channelId: row.dm_messages.channelId,
         author: userToPublic(row.users),
-        content: row.messages.content,
-        editedAt: row.messages.editedAt?.toISOString() ?? null,
-        createdAt: row.messages.createdAt.toISOString(),
+        content: row.dm_messages.content,
+        editedAt: row.dm_messages.editedAt?.toISOString() ?? null,
+        createdAt: row.dm_messages.createdAt.toISOString(),
         replyTo: null,
         reactions: [],
         attachments: [],
@@ -227,7 +226,7 @@ export function dmRoutes(
       const id = crypto.randomUUID();
       const now = new Date();
 
-      await db.insert(messages).values({
+      await db.insert(dmMessages).values({
         id,
         channelId,
         authorId: request.user.sub,
