@@ -1,16 +1,33 @@
 # Migo
 
-An open-source Discord-like chat platform you can self-host. Text channels, voice chat, screen sharing, DMs, file uploads, custom themes, and more.
+[![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
+[![GitHub Release](https://img.shields.io/github/v/release/eduardoalba00/migo)](https://github.com/eduardoalba00/migo/releases)
 
-**[Download the desktop client](https://github.com/eduardoalba00/migo/releases)**
+An open-source, self-hosted chat platform with text channels, voice chat, screen sharing, direct messages, file uploads, and custom themes.
 
-## Packages
+**[Download the Desktop Client](https://github.com/eduardoalba00/migo/releases)**
 
-| Package | Description |
-|---------|-------------|
-| `@migo/server` | Fastify 5 REST API + WebSocket server. PostgreSQL via Drizzle ORM. Voice + screen sharing via LiveKit. |
-| `@migo/client` | Electron 40 desktop app. React 19 renderer with Zustand, Tailwind CSS 4, and Radix UI. |
-| `@migo/shared` | Zod schemas, TypeScript types, WebSocket protocol definitions, and API route constants shared between client and server. |
+<!-- TODO: Add screenshots -->
+
+## Features
+
+- **Text channels** — organized by categories, with message editing, reactions, and file attachments
+- **Voice chat** — real-time voice channels with per-user volume control and noise suppression (Krisp)
+- **Screen sharing** — VP9 video at 60fps with process-specific audio capture (Windows)
+- **Direct messages** — private conversations outside of servers
+- **File uploads** — drag-and-drop images and files into any channel
+- **Roles & permissions** — manage members with customizable roles
+- **Custom themes** — light and dark mode with OKLCH color tokens
+- **Auto-updates** — the desktop client updates itself via GitHub Releases
+- **Self-hosted** — run the server on your own hardware with Docker Compose
+
+## Tech Stack
+
+| Package | Stack |
+|---------|-------|
+| **`@migo/server`** | Fastify 5, PostgreSQL (Drizzle ORM), LiveKit, JWT auth (jose) |
+| **`@migo/client`** | Electron 40, React 19, Zustand, Tailwind CSS 4, Radix UI, LiveKit SDK |
+| **`@migo/shared`** | Zod schemas, TypeScript types, WebSocket protocol definitions |
 
 ## Self-Host with Docker Compose
 
@@ -90,6 +107,46 @@ Open these additional firewall ports:
 
 Then set `LIVEKIT_URL=ws://<your-server-ip>:7880` in your `.env.prod`.
 
+## Local Development
+
+### Prerequisites
+
+- [Node.js](https://nodejs.org/) v20+
+- [pnpm](https://pnpm.io/) v9+
+- [Docker](https://docs.docker.com/engine/install/) (for PostgreSQL + LiveKit in dev)
+- Windows: Visual Studio Build Tools (for the native audio capture addon)
+
+### Setup
+
+```bash
+git clone https://github.com/eduardoalba00/migo.git && cd migo
+pnpm install
+```
+
+### Dev Servers
+
+Run in separate terminals:
+
+```bash
+pnpm dev:server    # Starts Postgres + LiveKit via docker compose, then Fastify (port 3000)
+pnpm dev:client    # Electron + Vite React app
+```
+
+### Other Commands
+
+```bash
+pnpm build:server        # tsc → packages/server/dist/
+pnpm build:client        # electron-vite build
+pnpm db:generate         # Generate Drizzle migration files from schema changes
+pnpm db:migrate          # Apply migrations
+```
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the full contributor workflow.
+
+## Contributing
+
+Contributions are welcome! Please read the [Contributing Guide](CONTRIBUTING.md) and [Code of Conduct](CODE_OF_CONDUCT.md) before opening a pull request.
+
 ## License
 
-[MIT](LICENSE)
+[AGPL-3.0](LICENSE)

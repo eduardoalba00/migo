@@ -60,7 +60,7 @@ export type ScreenTrackCallback = (
   action: "add" | "remove",
 ) => void;
 
-// Discord-style VAD thresholds
+// Voice activity detection thresholds
 const SPEAKING_THRESHOLD = 15;          // frequency bin average (0-255 range)
 const SPEAKING_THRESHOLD_NS_LOCAL = 30; // higher threshold for local mic when browser NS is on
                                         // (Chromium applies NS in the WebRTC send path, not on
