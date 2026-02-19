@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="packages/client/resources/icon.png" width="128" alt="Migo" />
+</p>
+
 # Migo
 
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
