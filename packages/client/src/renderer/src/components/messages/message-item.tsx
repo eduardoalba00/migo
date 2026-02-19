@@ -214,13 +214,13 @@ export function MessageItem({ message, compact }: MessageItemProps) {
     return (
       <>
         <ReplyRef />
-        <div className="relative group flex items-start hover:bg-muted/30 px-4 py-0.5">
+        <div className="relative group flex items-start hover:bg-muted/30 pl-4 pr-4 py-0.5">
           <div className="w-10 shrink-0 flex justify-center">
             <span className="hidden group-hover:inline text-[10px] text-muted-foreground leading-[22px]">
               {formatTime(message.createdAt)}
             </span>
           </div>
-          <div className="flex-1 min-w-0">
+          <div className="flex-1 min-w-0 ml-4">
             <MessageContent />
             <Reactions />
           </div>
