@@ -93,13 +93,6 @@ jobs:
           git push
           git push --tags
 
-      - name: Sync version bump back to dev
-        shell: bash
-        run: |
-          git fetch origin dev
-          git checkout dev
-          git merge main --no-edit
-          git push origin dev
 
   docker:
     needs: bump
