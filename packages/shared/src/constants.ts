@@ -1,4 +1,4 @@
-export const PROTOCOL_VERSION = "1.7.3";
+export const PROTOCOL_VERSION = "1.7.4";
 
 /**
  * Minimum client version the server will accept.
