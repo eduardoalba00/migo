@@ -5,10 +5,10 @@
   "packageManager": "pnpm@9.11.0",
   "scripts": {
     "dev:server": "docker compose up -d --wait postgres livekit && pnpm --filter @migo/server dev",
-    "dev:client": "pnpm --filter @migo/client dev",
+    "dev:client": "cross-env MIGO_INSTANCE=1 pnpm --filter @migo/client dev",
+    "dev:client2": "cross-env MIGO_INSTANCE=2 pnpm --filter @migo/client dev",
     "build:server": "pnpm --filter @migo/server build",
     "build:client": "pnpm --filter @migo/client build",
-    "dev:client2": "cross-env MIGO_INSTANCE=2 pnpm --filter @migo/client dev",
     "db:generate": "pnpm --filter @migo/server db:generate",
     "db:migrate": "pnpm --filter @migo/server db:migrate",
     "prod:server": "docker compose -f docker-compose.prod.yml --env-file .env.prod up -d",
