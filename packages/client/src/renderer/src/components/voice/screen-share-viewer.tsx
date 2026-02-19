@@ -279,21 +279,15 @@ export function ScreenShareViewer({ tracks, getUserName }: ScreenShareViewerProp
     }
   }, []);
 
-  // Auto-focus when there's only one share
-  const effectiveFocusedUserId =
-    userIds.length === 1 ? userIds[0] : focusedUserId;
-  const effectiveFocusedTrack =
-    userIds.length === 1 ? tracks[userIds[0]] : focusedTrack;
-
-  // Focused mode
-  if (effectiveFocusedUserId && effectiveFocusedTrack) {
+  // Focused mode — only when user explicitly clicks a tile
+  if (focusedUserId && focusedTrack) {
     return (
       <FocusedView
         containerRef={containerRef}
-        track={effectiveFocusedTrack}
-        sharerName={getUserName(effectiveFocusedUserId)}
-        sharerUserId={effectiveFocusedUserId}
-        showBackButton={userIds.length > 1}
+        track={focusedTrack}
+        sharerName={getUserName(focusedUserId)}
+        sharerUserId={focusedUserId}
+        showBackButton
         onBack={unfocusScreenShare}
         isFullscreen={isFullscreen}
         onToggleFullscreen={toggleFullscreen}
@@ -303,9 +297,11 @@ export function ScreenShareViewer({ tracks, getUserName }: ScreenShareViewerProp
 
   // Grid mode
   const gridClass =
-    userIds.length === 2
-      ? "grid-cols-2 grid-rows-1"
-      : "grid-cols-2 grid-rows-2";
+    userIds.length === 1
+      ? "grid-cols-1 grid-rows-1"
+      : userIds.length === 2
+        ? "grid-cols-2 grid-rows-1"
+        : "grid-cols-2 grid-rows-2";
 
   return (
     <div ref={containerRef} className={`flex-1 min-h-0 grid ${gridClass} gap-1 bg-zinc-900 p-1`}>

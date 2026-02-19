@@ -616,7 +616,7 @@ export class LiveKitManager {
             // Screen share audio → separate tracking for independent volume control
             const vol = this.screenShareVolumes.get(participant.identity) ?? 1;
             el.volume = vol;
-            el.muted = this.screenShareMuted.get(participant.identity) ?? false;
+            el.muted = this.screenShareMuted.get(participant.identity) ?? true;
             const existing = this.screenShareAudioElements.get(participant.identity) ?? [];
             existing.push(el);
             this.screenShareAudioElements.set(participant.identity, existing);

@@ -525,6 +525,11 @@ export const useVoiceStore = create<VoiceStoreState>()((set, get) => ({
     const selfId = useAuthStore.getState().user?.id;
     if (data.userId !== selfId) {
       playScreenShareStartSound();
+      // Default new screen share audio to muted — user opts in manually
+      livekitManager.setScreenShareMuted(data.userId, true);
+      set((s) => ({
+        screenShareMuted: { ...s.screenShareMuted, [data.userId]: true },
+      }));
     }
 
     const { channelUsers } = get();
