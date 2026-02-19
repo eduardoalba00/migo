@@ -273,7 +273,7 @@ function setupAutoUpdater(mainWindow: BrowserWindow): void {
   });
 
   ipcMain.on("updater:install", () => {
-    autoUpdater.quitAndInstall();
+    autoUpdater.quitAndInstall(true, true);
   });
 
   ipcMain.handle("updater:check", () => {
@@ -284,8 +284,10 @@ function setupAutoUpdater(mainWindow: BrowserWindow): void {
     return app.getVersion();
   });
 
+  // Check for updates on startup (don't wait for renderer to ask)
+  autoUpdater.checkForUpdates().catch(() => {});
+
   // Re-check for updates every 5 minutes during long sessions
-  // (initial check is triggered by the renderer after it mounts)
   setInterval(() => {
     autoUpdater.checkForUpdates().catch(() => {});
   }, 5 * 60 * 1000);
