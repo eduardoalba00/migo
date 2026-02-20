@@ -76,21 +76,6 @@ else
 fi
 echo
 
-# Install pnpm if missing
-if command -v pnpm &>/dev/null; then
-  echo "pnpm already installed: $(pnpm --version)"
-else
-  echo "Installing pnpm..."
-  npm install -g pnpm
-  echo "pnpm installed."
-fi
-echo
-
-# Install dependencies
-echo "Installing dependencies..."
-pnpm install
-echo
-
 # Open firewall ports
 echo "Configuring firewall..."
 if command -v ufw &>/dev/null; then
@@ -114,4 +99,4 @@ echo
 # Run setup
 echo "Running Migo setup..."
 echo
-pnpm prod:setup
+node scripts/setup.mjs

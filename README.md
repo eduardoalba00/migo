@@ -47,18 +47,17 @@ This installs git, Docker, and Node.js, clones the repo to `/opt/migo`, opens fi
 
 ```bash
 cd /opt/migo
-pnpm prod:start    # Start services (after initial setup)
-pnpm prod:stop     # Stop all services
+node scripts/start-prod.mjs   # Start services
+node scripts/stop-prod.mjs    # Stop all services
 ```
 
 ### Manual Setup
 
-If you already have Docker, Node.js 20+, and pnpm installed:
+If you already have Docker and Node.js 20+ installed:
 
 ```bash
 git clone https://github.com/eduardoalba00/migo.git && cd migo
-pnpm install
-pnpm prod:setup
+node scripts/setup.mjs
 ```
 
 Required firewall ports: **8080** TCP, **7880** TCP, **7881** TCP, **50000-60000** UDP
