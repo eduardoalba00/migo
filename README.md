@@ -82,6 +82,9 @@ Watchtower checks for new server images every 5 minutes and automatically restar
 ```bash
 git clone https://github.com/eduardoalba00/migo.git && cd migo
 pnpm install
+
+# Windows only — build the native audio capture addon
+cd packages/client && npx node-gyp rebuild && cd ../..
 ```
 
 ### Dev Servers

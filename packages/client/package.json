@@ -9,8 +9,8 @@
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
+    "install": "node -e \"\"",
     "rebuild": "node-gyp rebuild",
-    "postinstall": "node-gyp rebuild || true",
     "test": "vitest run",
     "test:watch": "vitest"
   },

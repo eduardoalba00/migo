@@ -139,6 +139,10 @@ jobs:
 
       - run: pnpm install
 
+      - name: Build native addon
+        run: npx node-gyp rebuild
+        working-directory: packages/client
+
       - name: Build
         run: pnpm build:client
 
