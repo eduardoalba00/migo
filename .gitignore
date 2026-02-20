@@ -10,4 +10,5 @@ build
 .env.local
 .env.prod
 *uploads/
+.livekit/
 *settings.local.json

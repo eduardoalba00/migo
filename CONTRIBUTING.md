@@ -8,7 +8,7 @@ Thanks for your interest in contributing! This guide covers the development work
 
 - [Node.js](https://nodejs.org/) v20+
 - [pnpm](https://pnpm.io/) v9+
-- [Docker](https://docs.docker.com/engine/install/) (for PostgreSQL + LiveKit in dev)
+- [Docker](https://docs.docker.com/engine/install/) (for PostgreSQL in dev)
 - Windows: Visual Studio Build Tools (for the native audio capture addon)
 
 ### Install
@@ -22,8 +22,8 @@ pnpm install
 ### Run Dev Servers
 
 ```bash
-# Terminal 1 — starts Postgres + LiveKit containers, then Fastify server on port 3000
-pnpm dev:server
+# Terminal 1 — starts Postgres (Docker) + LiveKit (native) + Fastify server on port 3000
+pnpm dev
 
 # Terminal 2 — Electron + Vite React app
 pnpm dev:client

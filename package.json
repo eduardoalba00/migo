@@ -4,15 +4,16 @@
   "license": "AGPL-3.0-only",
   "packageManager": "pnpm@9.11.0",
   "scripts": {
-    "dev:server": "docker compose up -d --wait postgres livekit && pnpm --filter @migo/server dev",
+    "dev": "node scripts/start-dev.mjs",
     "dev:client": "cross-env MIGO_INSTANCE=1 pnpm --filter @migo/client dev",
     "dev:client2": "cross-env MIGO_INSTANCE=2 pnpm --filter @migo/client dev",
+    "prod:setup": "node scripts/setup.mjs",
+    "prod:start": "node scripts/start-prod.mjs",
+    "prod:stop": "node scripts/stop-prod.mjs",
     "build:server": "pnpm --filter @migo/server build",
     "build:client": "pnpm --filter @migo/client build",
     "db:generate": "pnpm --filter @migo/server db:generate",
     "db:migrate": "pnpm --filter @migo/server db:migrate",
-    "prod:server": "docker compose -f docker-compose.prod.yml --env-file .env.prod up -d",
-    "prod:server:down": "docker compose -f docker-compose.prod.yml --env-file .env.prod down",
     "ship": "git checkout main && git merge dev && git push origin main && git checkout dev"
   },
   "devDependencies": {

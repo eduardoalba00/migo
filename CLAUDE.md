@@ -8,10 +8,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # Install dependencies
 pnpm install
 
-# Dev servers (run in separate terminals)
-pnpm dev:server          # Starts Postgres + LiveKit via docker compose, then Fastify with tsx watch (port 3000)
-pnpm dev:client          # Electron + Vite React app
+# Dev (Postgres via Docker + LiveKit native + Fastify — all in one command)
+pnpm dev                 # Starts everything, Ctrl+C stops all
+pnpm dev:client          # Electron + Vite React app (separate terminal)
 pnpm dev:client2         # Second client instance (MIGO_INSTANCE=2)
+
+# Production (self-hosted)
+pnpm prod:setup              # Interactive setup: generates .env.prod with secrets, starts services
+pnpm prod:start              # Starts Postgres + server + Watchtower (Docker) + LiveKit (native)
+pnpm prod:stop               # Stops all prod services
 
 # Production builds
 pnpm build:server        # tsc → packages/server/dist/
@@ -51,19 +56,26 @@ Multi-stage build: installs deps → builds shared + server → copies only prod
 
 ## Self-Hosted Deployment
 
-Production runs via `docker-compose.prod.yml` with three services:
+`pnpm prod:setup` runs an interactive Node.js script that detects the public IP, generates secrets, writes `.env.prod`, and starts all services. For subsequent starts, use `pnpm prod:start`. Stop with `pnpm prod:stop`.
 
+**Docker services** (`docker-compose.prod.yml`):
 - **postgres** — `postgres:17-alpine` with a persistent volume. Server connects via internal DNS (`postgres:5432`).
 - **server** — `ghcr.io/eduardoalba00/migo-server:latest`. Port 8080 (HTTP/WS). Persistent volume at `/data/uploads`.
 - **watchtower** — Monitors the server container for new GHCR images, auto-restarts on update (polls every 5 minutes).
 
-Voice/video uses **LiveKit Cloud** (not self-hosted). Create a free project at https://cloud.livekit.io and set `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` in `.env.prod`.
+**LiveKit** runs natively (not in Docker) to avoid Docker Desktop's VM NAT destroying UDP performance. The `start-livekit.mjs` script auto-downloads the correct binary for the platform (Windows/macOS/Linux), generates config dynamically, and runs it. In prod mode (`--prod`), it reads `LIVEKIT_API_KEY`/`LIVEKIT_API_SECRET` from env vars and runs as a background process. The stop script (`stop-prod.mjs`) kills it via a saved PID file.
 
 Environment variables are in `.env.prod` (see `.env.example`): `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`.
 
+Required firewall ports:
+- **8080 TCP** — Migo API + WebSocket
+- **7880 TCP** — LiveKit signaling
+- **7881 TCP** — LiveKit WebRTC TCP fallback
+- **50000-60000 UDP** — LiveKit WebRTC media
+
 CI/CD: GitHub Actions builds the GHCR image on push to `main`. Watchtower pulls the latest image automatically — no manual deploy step.
 
-Start: `docker compose -f docker-compose.prod.yml --env-file .env.prod up -d`
+Start: `pnpm prod:setup` then `pnpm prod:start`. Stop: `pnpm prod:stop`.
 
 ## Architecture
 

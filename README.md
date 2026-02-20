@@ -33,33 +33,35 @@ An open-source, self-hosted chat platform with text channels, voice chat, screen
 | **`@migo/client`** | Electron 40, React 19, Zustand, Tailwind CSS 4, Radix UI, LiveKit SDK |
 | **`@migo/shared`** | Zod schemas, TypeScript types, WebSocket protocol definitions |
 
-## Self-Host with Docker Compose
+## Self-Host
 
-Docker Compose runs the Migo server, PostgreSQL, and Watchtower (auto-updates). Voice and screen sharing are handled by [LiveKit Cloud](https://cloud.livekit.io).
+Docker Compose runs the Migo server, PostgreSQL, and Watchtower (auto-updates). LiveKit runs natively (auto-downloaded) for best voice/video performance.
 
-### Prerequisites
+### Quick Start (Linux VPS)
 
-- [Docker](https://docs.docker.com/engine/install/) and [Docker Compose](https://docs.docker.com/compose/install/) installed
-- A free [LiveKit Cloud](https://cloud.livekit.io) project (for voice + screen sharing)
-- Port **8080** open on your firewall
+```bash
+curl -fsSL https://raw.githubusercontent.com/eduardoalba00/migo/main/scripts/install-linux.sh | sudo bash
+```
 
-### Setup
+This installs git, Docker, and Node.js, clones the repo to `/opt/migo`, opens firewall ports, generates secrets, and starts everything.
+
+```bash
+cd /opt/migo
+pnpm prod:start    # Start services (after initial setup)
+pnpm prod:stop     # Stop all services
+```
+
+### Manual Setup
+
+If you already have Docker, Node.js 20+, and pnpm installed:
 
 ```bash
 git clone https://github.com/eduardoalba00/migo.git && cd migo
+pnpm install
+pnpm prod:setup
 ```
 
-**Linux / macOS:**
-```bash
-chmod +x setup.sh && ./setup.sh
-```
-
-**Windows (PowerShell):**
-```powershell
-.\setup.ps1
-```
-
-The setup script auto-detects your public IP, generates secrets, and prompts you for your LiveKit Cloud credentials.
+Required firewall ports: **8080** TCP, **7880** TCP, **7881** TCP, **50000-60000** UDP
 
 ### Connect
 
@@ -67,57 +69,13 @@ Open Migo → **Add Workspace** → enter `http://<your-server-ip>:8080`.
 
 Watchtower checks for new server images every 5 minutes and automatically restarts the container when an update is available.
 
-## Self-Hosting LiveKit (Advanced)
-
-LiveKit Cloud is recommended for most users. If you prefer to self-host LiveKit for full control or lower latency, install it **natively on the host** — not in Docker. Docker's UDP port forwarding (especially on Windows/WSL2) causes severe performance issues with WebRTC media.
-
-### Install LiveKit Server
-
-**Linux (amd64):**
-```bash
-curl -sSL https://get.livekit.io/linux | bash
-```
-
-**macOS:**
-```bash
-brew install livekit
-```
-
-**Windows:** Download the binary from [LiveKit releases](https://github.com/livekit/livekit/releases).
-
-### Configure and Run
-
-Create a `livekit.yaml`:
-
-```yaml
-port: 7880
-rtc:
-  tcp_port: 7881
-  port_range_start: 50000
-  port_range_end: 50100
-  use_external_ip: true
-keys:
-  your-api-key: your-api-secret
-```
-
-```bash
-livekit-server --config livekit.yaml
-```
-
-Open these additional firewall ports:
-- **7880** TCP — LiveKit signaling
-- **7881** TCP — LiveKit TCP media fallback
-- **50000-50100** UDP — WebRTC media
-
-Then set `LIVEKIT_URL=ws://<your-server-ip>:7880` in your `.env.prod`.
-
 ## Local Development
 
 ### Prerequisites
 
 - [Node.js](https://nodejs.org/) v20+
 - [pnpm](https://pnpm.io/) v9+
-- [Docker](https://docs.docker.com/engine/install/) (for PostgreSQL + LiveKit in dev)
+- [Docker](https://docs.docker.com/engine/install/) (for PostgreSQL in dev)
 - Windows: Visual Studio Build Tools (for the native audio capture addon)
 
 ### Setup
@@ -129,11 +87,9 @@ pnpm install
 
 ### Dev Servers
 
-Run in separate terminals:
-
 ```bash
-pnpm dev:server    # Starts Postgres + LiveKit via docker compose, then Fastify (port 3000)
-pnpm dev:client    # Electron + Vite React app
+pnpm dev           # Starts Postgres (Docker) + LiveKit (native) + Fastify — all in one command
+pnpm dev:client    # Electron + Vite React app (separate terminal)
 ```
 
 ### Other Commands
