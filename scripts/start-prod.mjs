@@ -1,5 +1,5 @@
 import { spawn, execFileSync } from "node:child_process";
-import { readFileSync, writeFileSync, existsSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -51,6 +51,7 @@ const livekit = spawn("node", [join(__dirname, "start-livekit.mjs"), "--prod"], 
 livekit.unref();
 
 // Save PID so stop script can kill it
+mkdirSync(join(root, ".livekit"), { recursive: true });
 writeFileSync(PID_FILE, String(livekit.pid));
 
 console.log("\nMigo backend is up and running!");
