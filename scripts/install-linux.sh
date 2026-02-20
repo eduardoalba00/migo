@@ -79,12 +79,14 @@ echo
 # Open firewall ports
 echo "Configuring firewall..."
 if command -v ufw &>/dev/null; then
+  ufw allow 443/udp     >/dev/null 2>&1 || true
   ufw allow 8080/tcp    >/dev/null 2>&1 || true
   ufw allow 7880/tcp    >/dev/null 2>&1 || true
   ufw allow 7881/tcp    >/dev/null 2>&1 || true
   ufw allow 50000:60000/udp >/dev/null 2>&1 || true
   echo "UFW rules added."
 elif command -v firewall-cmd &>/dev/null; then
+  firewall-cmd --permanent --add-port=443/udp    >/dev/null 2>&1 || true
   firewall-cmd --permanent --add-port=8080/tcp   >/dev/null 2>&1 || true
   firewall-cmd --permanent --add-port=7880/tcp   >/dev/null 2>&1 || true
   firewall-cmd --permanent --add-port=7881/tcp   >/dev/null 2>&1 || true
@@ -92,7 +94,7 @@ elif command -v firewall-cmd &>/dev/null; then
   firewall-cmd --reload >/dev/null 2>&1 || true
   echo "Firewalld rules added."
 else
-  echo "No firewall manager detected. Manually open ports: 8080/tcp, 7880/tcp, 7881/tcp, 50000-60000/udp"
+  echo "No firewall manager detected. Manually open ports: 443/udp, 8080/tcp, 7880/tcp, 7881/tcp, 50000-60000/udp"
 fi
 echo
 

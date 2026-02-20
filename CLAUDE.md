@@ -68,6 +68,7 @@ Multi-stage build: installs deps → builds shared + server → copies only prod
 Environment variables are in `.env.prod` (see `.env.example`): `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`.
 
 Required firewall ports:
+- **443 UDP** — LiveKit TURN relay (screen share through restrictive NATs)
 - **8080 TCP** — Migo API + WebSocket
 - **7880 TCP** — LiveKit signaling
 - **7881 TCP** — LiveKit WebRTC TCP fallback

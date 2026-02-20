@@ -60,7 +60,18 @@ git clone https://github.com/eduardoalba00/migo.git && cd migo
 node scripts/setup.mjs
 ```
 
-Required firewall ports: **8080** TCP, **7880** TCP, **7881** TCP, **50000-60000** UDP
+Required firewall ports: **443** UDP, **8080** TCP, **7880** TCP, **7881** TCP, **50000-60000** UDP
+
+If the install script didn't configure the firewall, open the ports manually:
+
+```bash
+sudo ufw allow 443/udp
+sudo ufw allow 8080/tcp
+sudo ufw allow 7880/tcp
+sudo ufw allow 7881/tcp
+sudo ufw allow 50000:60000/udp
+sudo ufw enable
+```
 
 ### Connect
 
