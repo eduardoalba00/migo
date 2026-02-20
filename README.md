@@ -16,7 +16,7 @@ An open-source, self-hosted chat platform with text channels, voice chat, screen
 ## Features
 
 - **Text channels** — organized by categories, with message editing, reactions, and file attachments
-- **Voice chat** — real-time voice channels with per-user volume control and noise suppression (Krisp)
+- **Voice chat** — real-time voice channels with per-user volume control and noise suppression (RNNoise)
 - **Screen sharing** — VP9 video at 60fps with process-specific audio capture (Windows)
 - **Direct messages** — private conversations outside of servers
 - **File uploads** — drag-and-drop images and files into any channel
@@ -27,42 +27,63 @@ An open-source, self-hosted chat platform with text channels, voice chat, screen
 
 ## Tech Stack
 
-| Package | Stack |
-|---------|-------|
-| **`@migo/server`** | Fastify 5, PostgreSQL (Drizzle ORM), LiveKit, JWT auth (jose) |
+| Package            | Stack                                                                 |
+| ------------------ | --------------------------------------------------------------------- |
+| **`@migo/server`** | Fastify 5, PostgreSQL (Drizzle ORM), LiveKit, JWT auth (jose)         |
 | **`@migo/client`** | Electron 40, React 19, Zustand, Tailwind CSS 4, Radix UI, LiveKit SDK |
-| **`@migo/shared`** | Zod schemas, TypeScript types, WebSocket protocol definitions |
+| **`@migo/shared`** | Zod schemas, TypeScript types, WebSocket protocol definitions         |
 
 ## Self-Host
 
 Docker Compose runs the Migo server, PostgreSQL, and Watchtower (auto-updates). LiveKit runs natively (auto-downloaded) for best voice/video performance.
 
-### Quick Start (Linux VPS)
+### Prerequisites
+
+- [Docker](https://docs.docker.com/engine/install/) and Docker Compose
+- [Node.js](https://nodejs.org/) v20+
+
+<details>
+<summary>One-line installer (Ubuntu/Debian) — installs all prerequisites automatically</summary>
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/eduardoalba00/migo/main/scripts/install-linux.sh | sudo bash
 ```
 
-This installs git, Docker, and Node.js, clones the repo to `/opt/migo`, opens firewall ports, generates secrets, and starts everything.
+This installs git, Docker, and Node.js, clones the repo to `/opt/migo`, opens firewall ports, generates secrets, and starts everything. Once it finishes, skip to [Connect](#connect).
+
+</details>
+
+### Setup
 
 ```bash
-cd /opt/migo
+git clone https://github.com/eduardoalba00/migo.git
+cd migo
+node scripts/setup.mjs
+```
+
+The setup script detects your public IP, generates secrets, writes `.env.prod`, and starts all services (Postgres, Migo server, Watchtower, LiveKit).
+
+```bash
 node scripts/start-prod.mjs   # Start services
 node scripts/stop-prod.mjs    # Stop all services
 ```
 
-### Manual Setup
+### Firewall
 
-If you already have Docker and Node.js 20+ installed:
+Open these ports on your server (port forwarding):
 
-```bash
-git clone https://github.com/eduardoalba00/migo.git && cd migo
-node scripts/setup.mjs
-```
+| Port        | Protocol | Purpose                                            |
+| ----------- | -------- | -------------------------------------------------- |
+| 443         | UDP      | TURN relay (screen share through restrictive NATs) |
+| 8080        | TCP      | Migo API + WebSocket                               |
+| 7880        | TCP      | LiveKit signaling                                  |
+| 7881        | TCP      | LiveKit WebRTC TCP fallback                        |
+| 50000–60000 | UDP      | LiveKit WebRTC media                               |
 
-Required firewall ports: **443** UDP, **8080** TCP, **7880** TCP, **7881** TCP, **50000-60000** UDP
+<details>
+<summary>Open ports manually on Linux (UFW)</summary>
 
-If the install script didn't configure the firewall, open the ports manually:
+If your firewall wasn't configured by the install script, you can open the required ports with UFW:
 
 ```bash
 sudo ufw allow 443/udp
@@ -72,6 +93,8 @@ sudo ufw allow 7881/tcp
 sudo ufw allow 50000:60000/udp
 sudo ufw enable
 ```
+
+</details>
 
 ### Connect
 
@@ -91,11 +114,14 @@ Watchtower checks for new server images every 5 minutes and automatically restar
 ### Setup
 
 ```bash
-git clone https://github.com/eduardoalba00/migo.git && cd migo
+git clone https://github.com/eduardoalba00/migo.git
+cd migo
 pnpm install
 
 # Windows only — build the native audio capture addon
-cd packages/client && npx node-gyp rebuild && cd ../..
+cd packages/client
+npx node-gyp rebuild
+cd ../..
 ```
 
 ### Dev Servers
