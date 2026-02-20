@@ -96,7 +96,7 @@ else
 fi
 echo
 
-# Run setup
+# Run setup (reopen /dev/tty for interactive prompts when piped via curl)
 echo "Running Migo setup..."
 echo
-node scripts/setup.mjs
+node scripts/setup.mjs </dev/tty
