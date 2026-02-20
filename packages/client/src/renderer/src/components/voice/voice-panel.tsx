@@ -14,7 +14,7 @@ export function VoicePanel() {
   const isSpeaking = userId ? speakingUsers.has(userId) : false;
   const isScreenSharing = useVoiceStore((s) => s.isScreenSharing);
   const noiseSuppression = useVoiceStore((s) => s.noiseSuppression);
-  const noiseSuppressionMode = useVoiceStore((s) => s.noiseSuppressionMode);
+
   const toggleNoiseSuppression = useVoiceStore((s) => s.toggleNoiseSuppression);
   const leaveChannel = useVoiceStore((s) => s.leaveChannel);
   const toggleMute = useVoiceStore((s) => s.toggleMute);
@@ -78,9 +78,7 @@ export function VoicePanel() {
           )}
           title={
             noiseSuppression
-              ? noiseSuppressionMode === "krisp"
-                ? "Noise Suppression (Enhanced)"
-                : "Noise Suppression (Standard)"
+              ? "Noise Suppression On"
               : "Noise Suppression Off"
           }
         >

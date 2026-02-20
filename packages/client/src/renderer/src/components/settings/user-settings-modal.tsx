@@ -258,12 +258,7 @@ function VoiceTab() {
   const inputs = devices.filter((d) => d.kind === "audioinput");
   const outputs = devices.filter((d) => d.kind === "audiooutput");
 
-  const modeLabel =
-    noiseSuppressionMode === "krisp"
-      ? "Enhanced (Krisp)"
-      : noiseSuppressionMode === "browser"
-        ? "Standard (Browser)"
-        : "Off";
+  const modeLabel = noiseSuppressionMode !== "off" ? "On" : "Off";
 
   return (
     <div className="space-y-6">
