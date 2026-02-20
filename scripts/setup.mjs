@@ -95,6 +95,7 @@ LIVEKIT_API_SECRET=${livekitApiSecret}
 }
 
 console.log("\nRequired ports (open these on your firewall):");
+console.log("  443         UDP   — LiveKit TURN relay (screen share through NAT/firewalls)");
 console.log("  8080        TCP   — Migo API + WebSocket");
 console.log("  7880        TCP   — LiveKit signaling");
 console.log("  7881        TCP   — LiveKit WebRTC (TCP fallback)");
