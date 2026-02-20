@@ -10,4 +10,5 @@ export * from "./schemas/auth.js";
 export * from "./schemas/server.js";
 export * from "./schemas/message.js";
 export * from "./schemas/role.js";
+export * from "./types/annotation.js";
 export * from "./constants.js";

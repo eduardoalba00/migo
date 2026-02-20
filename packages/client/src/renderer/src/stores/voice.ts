@@ -3,6 +3,7 @@ import { WsOpcode } from "@migo/shared";
 import type { VoiceState, VoiceChannelUser } from "@migo/shared";
 import { livekitManager, type NoiseSuppressionMode } from "@/lib/livekit";
 import { wsManager } from "@/lib/ws";
+import { voiceSignal } from "@/lib/voice-signal";
 import {
   playJoinSound,
   playLeaveSound,
@@ -10,13 +11,13 @@ import {
   playUnmuteSound,
   playDeafenSound,
   playUndeafenSound,
-  playScreenShareStartSound,
-  playScreenShareStopSound,
 } from "@/lib/sounds";
 import { useAuthStore } from "./auth";
 import { useMemberStore } from "./members";
+import { useAnnotationStore } from "./annotation";
+import { createScreenShareActions } from "./voice-screen-share";
 
-interface VoiceStoreState {
+export interface VoiceStoreState {
   currentChannelId: string | null;
   currentServerId: string | null;
   /** All voice users across all channels, keyed by channelId → userId → user */
@@ -44,6 +45,12 @@ interface VoiceStoreState {
   setScreenShareVolume: (userId: string, volume: number) => void;
   toggleScreenShareMute: (userId: string) => void;
 
+  // Session Mode (annotation overlay)
+  isSessionMode: boolean;
+  screenShareSourceId: string | null;
+  screenShareSourceType: "window" | "screen" | null;
+  toggleSessionMode: () => Promise<void>;
+
   reannounceVoiceState: () => void;
   joinChannel: (channelId: string, serverId: string) => Promise<void>;
   leaveChannel: () => void;
@@ -59,41 +66,6 @@ interface VoiceStoreState {
   handleScreenShareStop: (data: { userId: string }) => void;
   focusScreenShare: (userId: string) => void;
   unfocusScreenShare: () => void;
-}
-
-// Helper to signal the server and wait for a response
-function voiceSignal(action: string, data?: any): Promise<any> {
-  const requestId = `req_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-
-  return new Promise((resolve, reject) => {
-    const handler = (msg: any) => {
-      if (msg.d?.requestId === requestId) {
-        wsManager.setVoiceSignalHandler(originalHandler);
-        if (msg.d.error) {
-          reject(new Error(msg.d.error));
-        } else {
-          resolve(msg.d.data);
-        }
-      }
-    };
-
-    const originalHandler = (wsManager as any).voiceSignalHandler;
-    const wrappedHandler = (msg: any) => {
-      handler(msg);
-      originalHandler?.(msg);
-    };
-    wsManager.setVoiceSignalHandler(wrappedHandler);
-
-    wsManager.send({
-      op: WsOpcode.VOICE_SIGNAL,
-      d: { requestId, action, data },
-    });
-
-    setTimeout(() => {
-      wsManager.setVoiceSignalHandler(originalHandler);
-      reject(new Error(`Voice signal timeout: ${action}`));
-    }, 10_000);
-  });
 }
 
 export const useVoiceStore = create<VoiceStoreState>()((set, get) => ({
@@ -113,6 +85,9 @@ export const useVoiceStore = create<VoiceStoreState>()((set, get) => ({
   showScreenSharePicker: false,
   screenShareVolumes: {},
   screenShareMuted: {},
+  isSessionMode: false,
+  screenShareSourceId: null,
+  screenShareSourceType: null,
 
   toggleNoiseSuppression: async () => {
     const newValue = !get().noiseSuppression;
@@ -233,7 +208,16 @@ export const useVoiceStore = create<VoiceStoreState>()((set, get) => ({
   },
 
   leaveChannel: () => {
-    const { currentChannelId } = get();
+    const { currentChannelId, isSessionMode } = get();
+
+    // End annotation session if active
+    if (isSessionMode) {
+      const annotationStore = useAnnotationStore.getState();
+      annotationStore.sendEvent({ type: "sessionEnd" });
+      annotationStore.endSession();
+      window.overlayBridgeAPI?.destroy().catch(() => {});
+    }
+
     // Stop browser screen share if active
     livekitManager.stopScreenShare().catch(() => {});
 
@@ -275,6 +259,9 @@ export const useVoiceStore = create<VoiceStoreState>()((set, get) => ({
       speakingUsers: new Set(),
       noiseSuppressionMode: "off" as NoiseSuppressionMode,
       isScreenSharing: false,
+      isSessionMode: false,
+      screenShareSourceId: null,
+      screenShareSourceType: null,
       screenShareTracks: {},
       focusedScreenShareUserId: null,
       showScreenSharePicker: false,
@@ -488,121 +475,7 @@ export const useVoiceStore = create<VoiceStoreState>()((set, get) => ({
     }));
   },
 
-  toggleScreenShare: () => {
-    const { isScreenSharing, currentChannelId } = get();
-    if (!currentChannelId) return;
-
-    if (isScreenSharing) {
-      get().stopScreenShare();
-    } else {
-      set({ showScreenSharePicker: true });
-    }
-  },
-
-  startScreenShare: async (target: { type: string; id: number }) => {
-    set({ showScreenSharePicker: false });
-
-    try {
-      // Pre-select the source in the main process so that when
-      // getDisplayMedia() is called, the handler provides the right source.
-      // Returns the desktopCapturer source ID (e.g. "window:12345:0") or null.
-      const sourceId = await window.screenAPI.selectSource(target.type, target.id);
-      if (!sourceId) throw new Error("No source selected");
-
-      // Map picker type to audio capture source type
-      const sourceType: "window" | "screen" =
-        target.type === "window" ? "window" : "screen";
-
-      // Use LiveKit SDK's setScreenShareEnabled which calls getDisplayMedia()
-      // internally. Chrome's full WebRTC pipeline handles encoding, FEC,
-      // congestion control, and NACK (tested at 55fps 1440p).
-      // Also starts WASAPI process audio capture if available.
-      await livekitManager.startScreenShare(sourceId, sourceType);
-
-      // Notify server so other clients see the screen share icon
-      voiceSignal("startScreenShare", {}).catch(() => {});
-
-      set({ isScreenSharing: true });
-      playScreenShareStartSound();
-    } catch (err) {
-      console.error("Failed to start screen share:", err);
-      set({ isScreenSharing: false });
-    }
-  },
-
-  stopScreenShare: () => {
-    livekitManager.stopScreenShare().catch(() => {});
-
-    playScreenShareStopSound();
-    set({ isScreenSharing: false });
-
-    // Notify server
-    voiceSignal("stopScreenShare", {}).catch(() => {});
-  },
-
-  handleScreenShareStart: (data: { userId: string; channelId: string }) => {
-    const selfId = useAuthStore.getState().user?.id;
-    if (data.userId !== selfId) {
-      playScreenShareStartSound();
-      // Default new screen share audio to muted — user opts in manually
-      livekitManager.setScreenShareMuted(data.userId, true);
-      set((s) => ({
-        screenShareMuted: { ...s.screenShareMuted, [data.userId]: true },
-      }));
-    }
-
-    const { channelUsers } = get();
-
-    // Update the user's screenSharing status
-    if (data.channelId && channelUsers[data.channelId]?.[data.userId]) {
-      set((s) => ({
-        channelUsers: {
-          ...s.channelUsers,
-          [data.channelId]: {
-            ...s.channelUsers[data.channelId],
-            [data.userId]: {
-              ...s.channelUsers[data.channelId][data.userId],
-              screenSharing: true,
-            },
-          },
-        },
-      }));
-    }
-    // LiveKit TrackSubscribed handles track arrival automatically
-  },
-
-  handleScreenShareStop: (data: { userId: string }) => {
-    const selfId = useAuthStore.getState().user?.id;
-    if (data.userId !== selfId) {
-      playScreenShareStopSound();
-    }
-
-    // Track cleanup is handled by LiveKit TrackUnsubscribed automatically
-
-    set((s) => {
-      // Update channelUsers to clear screenSharing flag
-      const channelUsers = { ...s.channelUsers };
-      for (const chId of Object.keys(channelUsers)) {
-        if (channelUsers[chId]?.[data.userId]) {
-          channelUsers[chId] = {
-            ...channelUsers[chId],
-            [data.userId]: {
-              ...channelUsers[chId][data.userId],
-              screenSharing: false,
-            },
-          };
-        }
-      }
-
-      return {
-        channelUsers,
-        focusedScreenShareUserId:
-          s.focusedScreenShareUserId === data.userId
-            ? null
-            : s.focusedScreenShareUserId,
-      };
-    });
-  },
+  ...createScreenShareActions(set, get),
 
   focusScreenShare: (userId: string) => {
     set({ focusedScreenShareUserId: userId });

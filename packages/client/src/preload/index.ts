@@ -18,6 +18,8 @@ const screenAPI = {
   getSources: () => ipcRenderer.invoke("screen:getSources"),
   selectSource: (targetType?: string, targetId?: number) =>
     ipcRenderer.invoke("screen:selectSource", targetType, targetId) as Promise<string | null>,
+  getDisplayIndex: (sourceId: string) =>
+    ipcRenderer.invoke("screen:getDisplayIndex", sourceId) as Promise<number>,
 };
 
 contextBridge.exposeInMainWorld("screenAPI", screenAPI);
@@ -54,3 +56,13 @@ const audioCaptureAPI = {
 };
 
 contextBridge.exposeInMainWorld("audioCaptureAPI", audioCaptureAPI);
+
+const overlayBridgeAPI = {
+  create: (displayIndex: number) =>
+    ipcRenderer.invoke("overlay:create", displayIndex) as Promise<boolean>,
+  destroy: () => ipcRenderer.invoke("overlay:destroy") as Promise<void>,
+  forwardEvents: (events: any[]) =>
+    ipcRenderer.send("overlay:forward-events", events),
+};
+
+contextBridge.exposeInMainWorld("overlayBridgeAPI", overlayBridgeAPI);

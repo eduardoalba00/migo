@@ -23,6 +23,7 @@ declare global {
   interface ScreenAPI {
     getSources: () => Promise<ScreenSources>;
     selectSource: (targetType?: string, targetId?: number) => Promise<string | null>;
+    getDisplayIndex: (sourceId: string) => Promise<number>;
   }
 
   interface UpdaterStatus {
@@ -53,10 +54,23 @@ declare global {
     onData: (callback: (buffer: Float32Array) => void) => () => void;
   }
 
+  interface OverlayBridgeAPI {
+    create: (displayIndex: number) => Promise<boolean>;
+    destroy: () => Promise<void>;
+    forwardEvents: (events: any[]) => void;
+  }
+
+  interface OverlayAPI {
+    onAnnotationEvents: (callback: (events: any[]) => void) => () => void;
+    onClear: (callback: () => void) => () => void;
+  }
+
   interface Window {
     windowAPI: WindowAPI;
     screenAPI: ScreenAPI;
     updaterAPI: UpdaterAPI;
     audioCaptureAPI: AudioCaptureAPI;
+    overlayBridgeAPI: OverlayBridgeAPI;
+    overlayAPI: OverlayAPI;
   }
 }

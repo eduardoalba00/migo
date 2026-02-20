@@ -9,6 +9,14 @@ export default defineConfig({
   },
   preload: {
     plugins: [externalizeDepsPlugin()],
+    build: {
+      rollupOptions: {
+        input: {
+          index: resolve("src/preload/index.ts"),
+          "overlay-preload": resolve("src/preload/overlay-preload.ts"),
+        },
+      },
+    },
   },
   renderer: {
     resolve: {
