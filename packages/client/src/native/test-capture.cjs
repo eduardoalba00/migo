@@ -46,6 +46,18 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/** Compute jitter stats from an array of inter-callback intervals (ms). */
+function computeJitterStats(intervals) {
+  if (intervals.length === 0) return { min: 0, max: 0, mean: 0, stddev: 0, gapsOver15ms: 0 };
+  const min = Math.min(...intervals);
+  const max = Math.max(...intervals);
+  const mean = intervals.reduce((a, b) => a + b, 0) / intervals.length;
+  const variance = intervals.reduce((sum, v) => sum + (v - mean) ** 2, 0) / intervals.length;
+  const stddev = Math.sqrt(variance);
+  const gapsOver15ms = intervals.filter((v) => v > 15).length;
+  return { min, max, mean, stddev, gapsOver15ms };
+}
+
 // ─── Load addon ────────────────────────────────────────────────────────────────
 
 console.log("\n--- Loading native addon ---\n");
@@ -115,10 +127,32 @@ console.log("\n--- Capture EXCLUDE mode (system audio minus self) ---\n");
 async function testExcludeCapture() {
   let jsCallbackCount = 0;
   let totalSamples = 0;
+  let silentChunks = 0;
+  let nonSilentChunks = 0;
+  const callbackTimestamps = [];
+  const intervals = [];
 
   addon.onData((buffer) => {
+    const now = performance.now();
     jsCallbackCount++;
     totalSamples += buffer.length;
+
+    // Track silence vs non-silence
+    let isSilent = true;
+    for (let i = 0; i < buffer.length; i++) {
+      if (Math.abs(buffer[i]) > 0.0001) {
+        isSilent = false;
+        break;
+      }
+    }
+    if (isSilent) silentChunks++;
+    else nonSilentChunks++;
+
+    // Track inter-callback timing
+    if (callbackTimestamps.length > 0) {
+      intervals.push(now - callbackTimestamps[callbackTimestamps.length - 1]);
+    }
+    callbackTimestamps.push(now);
   });
 
   addon.startCapture(process.pid, true); // exclude self
@@ -153,6 +187,29 @@ async function testExcludeCapture() {
     console.log(`    jsCallbackCount=${jsCallbackCount}, totalSamples=${totalSamples}`);
     assert(jsCallbackCount > 0, `JS callback received 0 calls`);
   });
+
+  // ─── Jitter analysis ───
+  console.log("\n--- Callback jitter analysis (EXCLUDE mode) ---\n");
+
+  const stats = computeJitterStats(intervals);
+
+  await testAsync("callback timing jitter analysis", async () => {
+    console.log(`    Callbacks: ${jsCallbackCount}`);
+    console.log(`    Silent chunks: ${silentChunks}, Non-silent: ${nonSilentChunks}`);
+    console.log(`    Inter-callback interval (ms):`);
+    console.log(`      min=${stats.min.toFixed(2)}, max=${stats.max.toFixed(2)}`);
+    console.log(`      mean=${stats.mean.toFixed(2)}, stddev=${stats.stddev.toFixed(2)}`);
+    console.log(`      gaps >15ms: ${stats.gapsOver15ms} / ${intervals.length}`);
+    // This is informational — we log the stats but don't fail on jitter
+    // After implementing event-driven WASAPI, re-run to verify improvement
+    assert(true);
+  });
+
+  await testAsync("no excessive gaps (>50ms) in callback delivery", async () => {
+    const hugeGaps = intervals.filter((v) => v > 50).length;
+    console.log(`    gaps >50ms: ${hugeGaps}`);
+    assert(hugeGaps === 0, `Found ${hugeGaps} gaps >50ms — indicates severe packet loss`);
+  });
 }
 
 // ─── INCLUDE mode capture (specific process) ──────────────────────────────────
@@ -160,7 +217,15 @@ async function testExcludeCapture() {
 async function testIncludeCapture() {
   console.log("\n--- Capture INCLUDE mode (target PID) ---\n");
 
-  addon.onData(() => {});
+  const intervals = [];
+  let lastTime = null;
+
+  addon.onData(() => {
+    const now = performance.now();
+    if (lastTime !== null) intervals.push(now - lastTime);
+    lastTime = now;
+  });
+
   addon.startCapture(realPid || process.pid, false); // include target
 
   await sleep(500);
@@ -174,11 +239,24 @@ async function testIncludeCapture() {
     }
   });
 
+  // Capture for a bit to collect jitter data
+  await sleep(1500);
+
   addon.stopCapture();
 
   await testAsync("stopCapture completes cleanly", async () => {
     assert(addon.isRunning() === false, "Still running after stopCapture");
   });
+
+  if (intervals.length > 0) {
+    const stats = computeJitterStats(intervals);
+    console.log(`\n--- Callback jitter analysis (INCLUDE mode) ---\n`);
+    console.log(`    Callbacks: ${intervals.length + 1}`);
+    console.log(`    Inter-callback interval (ms):`);
+    console.log(`      min=${stats.min.toFixed(2)}, max=${stats.max.toFixed(2)}`);
+    console.log(`      mean=${stats.mean.toFixed(2)}, stddev=${stats.stddev.toFixed(2)}`);
+    console.log(`      gaps >15ms: ${stats.gapsOver15ms} / ${intervals.length}`);
+  }
 }
 
 // ─── Run all async tests ───────────────────────────────────────────────────────

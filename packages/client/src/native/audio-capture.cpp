@@ -98,63 +98,91 @@ static std::mutex g_mutex;
 static std::string g_lastError;
 static std::atomic<int> g_dataCount{0};
 
+// Event handles for event-driven capture
+static HANDLE g_bufferEvent = nullptr; // signaled when WASAPI buffer is ready
+static HANDLE g_stopEvent = nullptr;   // signaled to stop capture loop
+static bool g_eventDriven = false;     // true if event-driven mode is active
+
 static void setError(const char *fmt, HRESULT hr) {
   char buf[256];
   snprintf(buf, sizeof(buf), fmt, hr);
   g_lastError = buf;
 }
 
-// Capture loop only — all init happens on the calling thread
-static void CaptureLoop() {
-  while (g_running.load()) {
-    UINT32 packetLength = 0;
-    HRESULT hr = g_captureClient->GetNextPacketSize(&packetLength);
-    if (FAILED(hr)) break;
+// ─── Drain all available packets from WASAPI buffer ────────────────────────────
 
-    while (packetLength > 0) {
-      BYTE *pData = nullptr;
-      UINT32 numFrames = 0;
-      DWORD flags = 0;
+static bool DrainPackets() {
+  UINT32 packetLength = 0;
+  HRESULT hr = g_captureClient->GetNextPacketSize(&packetLength);
+  if (FAILED(hr)) return false;
 
-      hr = g_captureClient->GetBuffer(&pData, &numFrames, &flags, nullptr, nullptr);
-      if (FAILED(hr)) break;
+  while (packetLength > 0) {
+    BYTE *pData = nullptr;
+    UINT32 numFrames = 0;
+    DWORD flags = 0;
 
-      size_t byteLen = numFrames * 2 * sizeof(float);
-      g_dataCount.fetch_add(1);
+    hr = g_captureClient->GetBuffer(&pData, &numFrames, &flags, nullptr, nullptr);
+    if (FAILED(hr)) return false;
 
-      if (g_tsfn) {
-        size_t sampleCount = numFrames * 2;
-        float *copy = new float[sampleCount];
-        if (flags & AUDCLNT_BUFFERFLAGS_SILENT) {
-          memset(copy, 0, sampleCount * sizeof(float));
-        } else {
-          memcpy(copy, pData, sampleCount * sizeof(float));
-        }
+    g_dataCount.fetch_add(1);
 
-        // Pack sample count + data pointer for the JS callback
-        struct CaptureData {
-          float *samples;
-          size_t count;
-        };
-        auto *cd = new CaptureData{copy, sampleCount};
-
-        g_tsfn->NonBlockingCall(cd,
-            [](Napi::Env env, Napi::Function jsCallback, CaptureData *data) {
-              // Copy into a new JS-owned ArrayBuffer (no custom finalizer)
-              auto ab = Napi::ArrayBuffer::New(env, data->count * sizeof(float));
-              memcpy(ab.Data(), data->samples, data->count * sizeof(float));
-              auto f32 = Napi::Float32Array::New(env, data->count, ab, 0);
-              delete[] data->samples;
-              delete data;
-              jsCallback.Call({f32});
-            });
+    if (g_tsfn) {
+      size_t sampleCount = numFrames * 2;
+      float *copy = new float[sampleCount];
+      if (flags & AUDCLNT_BUFFERFLAGS_SILENT) {
+        memset(copy, 0, sampleCount * sizeof(float));
+      } else {
+        memcpy(copy, pData, sampleCount * sizeof(float));
       }
 
-      g_captureClient->ReleaseBuffer(numFrames);
-      g_captureClient->GetNextPacketSize(&packetLength);
+      // Pack sample count + data pointer for the JS callback
+      struct CaptureData {
+        float *samples;
+        size_t count;
+      };
+      auto *cd = new CaptureData{copy, sampleCount};
+
+      g_tsfn->NonBlockingCall(cd,
+          [](Napi::Env env, Napi::Function jsCallback, CaptureData *data) {
+            // Copy into a new JS-owned ArrayBuffer (no custom finalizer)
+            auto ab = Napi::ArrayBuffer::New(env, data->count * sizeof(float));
+            memcpy(ab.Data(), data->samples, data->count * sizeof(float));
+            auto f32 = Napi::Float32Array::New(env, data->count, ab, 0);
+            delete[] data->samples;
+            delete data;
+            jsCallback.Call({f32});
+          });
     }
 
-    Sleep(10);
+    g_captureClient->ReleaseBuffer(numFrames);
+    hr = g_captureClient->GetNextPacketSize(&packetLength);
+    if (FAILED(hr)) return false;
+  }
+
+  return true;
+}
+
+// ─── Capture loop: event-driven with polling fallback ──────────────────────────
+
+static void CaptureLoop() {
+  if (g_eventDriven) {
+    // Event-driven mode: wait for WASAPI buffer event or stop event.
+    // Processes packets immediately when they arrive — no polling delay.
+    HANDLE handles[] = {g_bufferEvent, g_stopEvent};
+    while (true) {
+      DWORD result = WaitForMultipleObjects(2, handles, FALSE, 200);
+      if (result == WAIT_OBJECT_0 + 1) break; // stop event signaled
+      if (result == WAIT_FAILED) break;
+      // WAIT_OBJECT_0 (buffer ready) or WAIT_TIMEOUT — drain packets either way
+      if (!DrainPackets()) break;
+    }
+  } else {
+    // Polling fallback: Sleep(1) between polls.
+    // Used when event-driven mode is not supported by the audio driver.
+    while (g_running.load()) {
+      if (!DrainPackets()) break;
+      Sleep(1);
+    }
   }
 }
 
@@ -176,6 +204,7 @@ static Napi::Value StartCapture(const Napi::CallbackInfo &info) {
 
   g_lastError.clear();
   g_dataCount.store(0);
+  g_eventDriven = false;
 
   // Ensure COM is initialized on this thread (Node/Electron may already have it)
   CoInitializeEx(nullptr, COINIT_MULTITHREADED);
@@ -236,15 +265,99 @@ static Napi::Value StartCapture(const Napi::CallbackInfo &info) {
 
   REFERENCE_TIME bufferDuration = 200000; // 20ms
 
+  // ── Create event handles ──
+  g_bufferEvent = CreateEvent(nullptr, FALSE, FALSE, nullptr); // auto-reset
+  g_stopEvent = CreateEvent(nullptr, TRUE, FALSE, nullptr);    // manual-reset
+
+  // ── Try event-driven mode first ──
   hr = g_client->Initialize(AUDCLNT_SHAREMODE_SHARED,
-                            AUDCLNT_STREAMFLAGS_LOOPBACK, bufferDuration, 0,
-                            &fmt, nullptr);
+                            AUDCLNT_STREAMFLAGS_LOOPBACK |
+                                AUDCLNT_STREAMFLAGS_EVENTCALLBACK,
+                            bufferDuration, 0, &fmt, nullptr);
+
+  if (SUCCEEDED(hr)) {
+    hr = g_client->SetEventHandle(g_bufferEvent);
+    if (SUCCEEDED(hr)) {
+      g_eventDriven = true;
+    } else {
+      // SetEventHandle failed — re-initialize without event callback
+      g_client->Release();
+      g_client = nullptr;
+
+      // Re-activate the audio interface (can't reuse a failed IAudioClient)
+      auto handler2 = new ActivateHandler();
+      IActivateAudioInterfaceAsyncOperation *asyncOp2 = nullptr;
+      hr = ActivateAudioInterfaceAsync(
+          VIRTUAL_AUDIO_DEVICE_PROCESS_LOOPBACK, __uuidof(IAudioClient),
+          &activateParams, handler2, &asyncOp2);
+      if (SUCCEEDED(hr)) {
+        hr = handler2->Wait(5000);
+        if (SUCCEEDED(hr) && handler2->GetClient()) {
+          g_client = handler2->GetClient();
+        }
+      }
+      handler2->Release();
+      if (asyncOp2) asyncOp2->Release();
+
+      if (!g_client) {
+        setError("Re-activation after event mode fallback failed: 0x%08lX", hr);
+        CloseHandle(g_bufferEvent);
+        CloseHandle(g_stopEvent);
+        g_bufferEvent = nullptr;
+        g_stopEvent = nullptr;
+        Napi::Error::New(env, g_lastError).ThrowAsJavaScriptException();
+        return env.Undefined();
+      }
+
+      hr = g_client->Initialize(AUDCLNT_SHAREMODE_SHARED,
+                                AUDCLNT_STREAMFLAGS_LOOPBACK, bufferDuration, 0,
+                                &fmt, nullptr);
+    }
+  } else {
+    // Event-driven init failed — fall back to polling mode
+    g_client->Release();
+    g_client = nullptr;
+
+    // Re-activate (can't reuse a failed IAudioClient)
+    auto handler2 = new ActivateHandler();
+    IActivateAudioInterfaceAsyncOperation *asyncOp2 = nullptr;
+    hr = ActivateAudioInterfaceAsync(
+        VIRTUAL_AUDIO_DEVICE_PROCESS_LOOPBACK, __uuidof(IAudioClient),
+        &activateParams, handler2, &asyncOp2);
+    if (SUCCEEDED(hr)) {
+      hr = handler2->Wait(5000);
+      if (SUCCEEDED(hr) && handler2->GetClient()) {
+        g_client = handler2->GetClient();
+      }
+    }
+    handler2->Release();
+    if (asyncOp2) asyncOp2->Release();
+
+    if (!g_client) {
+      setError("Re-activation failed: 0x%08lX", hr);
+      CloseHandle(g_bufferEvent);
+      CloseHandle(g_stopEvent);
+      g_bufferEvent = nullptr;
+      g_stopEvent = nullptr;
+      Napi::Error::New(env, g_lastError).ThrowAsJavaScriptException();
+      return env.Undefined();
+    }
+
+    hr = g_client->Initialize(AUDCLNT_SHAREMODE_SHARED,
+                              AUDCLNT_STREAMFLAGS_LOOPBACK, bufferDuration, 0,
+                              &fmt, nullptr);
+  }
+
   if (FAILED(hr)) {
     char msg[128];
     snprintf(msg, sizeof(msg), "IAudioClient::Initialize: 0x%08lX", hr);
     g_lastError = msg;
     g_client->Release();
     g_client = nullptr;
+    CloseHandle(g_bufferEvent);
+    CloseHandle(g_stopEvent);
+    g_bufferEvent = nullptr;
+    g_stopEvent = nullptr;
     Napi::Error::New(env, msg).ThrowAsJavaScriptException();
     return env.Undefined();
   }
@@ -257,6 +370,10 @@ static Napi::Value StartCapture(const Napi::CallbackInfo &info) {
     g_lastError = msg;
     g_client->Release();
     g_client = nullptr;
+    CloseHandle(g_bufferEvent);
+    CloseHandle(g_stopEvent);
+    g_bufferEvent = nullptr;
+    g_stopEvent = nullptr;
     Napi::Error::New(env, msg).ThrowAsJavaScriptException();
     return env.Undefined();
   }
@@ -270,6 +387,10 @@ static Napi::Value StartCapture(const Napi::CallbackInfo &info) {
     g_captureClient = nullptr;
     g_client->Release();
     g_client = nullptr;
+    CloseHandle(g_bufferEvent);
+    CloseHandle(g_stopEvent);
+    g_bufferEvent = nullptr;
+    g_stopEvent = nullptr;
     Napi::Error::New(env, msg).ThrowAsJavaScriptException();
     return env.Undefined();
   }
@@ -285,6 +406,11 @@ static Napi::Value StopCapture(const Napi::CallbackInfo &info) {
   std::lock_guard<std::mutex> lock(g_mutex);
 
   g_running.store(false);
+
+  // Signal the stop event so the capture loop exits WaitForMultipleObjects
+  if (g_stopEvent) {
+    SetEvent(g_stopEvent);
+  }
 
   if (g_captureThread.joinable()) {
     g_captureThread.join();
@@ -305,6 +431,18 @@ static Napi::Value StopCapture(const Napi::CallbackInfo &info) {
     g_client->Release();
     g_client = nullptr;
   }
+
+  // Clean up event handles
+  if (g_bufferEvent) {
+    CloseHandle(g_bufferEvent);
+    g_bufferEvent = nullptr;
+  }
+  if (g_stopEvent) {
+    CloseHandle(g_stopEvent);
+    g_stopEvent = nullptr;
+  }
+
+  g_eventDriven = false;
 
   return info.Env().Undefined();
 }
