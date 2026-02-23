@@ -15,6 +15,13 @@
       "when": 1771138546481,
       "tag": "0001_add_dm_messages",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1771238546481,
+      "tag": "0002_nullable_attachment_message_id",
+      "breakpoints": true
     }
   ]
 }

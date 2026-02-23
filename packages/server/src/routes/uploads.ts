@@ -11,24 +11,7 @@ import fs from "node:fs";
 import fsPromises from "node:fs/promises";
 import path from "node:path";
 
-const ALLOWED_MIME_TYPES = new Set([
-  "image/jpeg",
-  "image/png",
-  "image/gif",
-  "image/webp",
-  "image/svg+xml",
-  "video/mp4",
-  "video/webm",
-  "audio/mpeg",
-  "audio/ogg",
-  "audio/wav",
-  "audio/webm",
-  "application/pdf",
-  "text/plain",
-  "application/zip",
-  "application/x-tar",
-  "application/gzip",
-]);
+const MAX_FILE_SIZE_MB = 50;
 
 export function uploadRoutes(
   db: AppDatabase,
@@ -52,19 +35,15 @@ export function uploadRoutes(
         return reply.status(400).send({ error: "No file uploaded" });
       }
 
-      if (!ALLOWED_MIME_TYPES.has(file.mimetype)) {
-        return reply.status(400).send({ error: "File type not allowed" });
-      }
-
       // Read file into buffer
       const chunks: Buffer[] = [];
-      const maxBytes = config.maxFileSizeMb * 1024 * 1024;
+      const maxBytes = MAX_FILE_SIZE_MB * 1024 * 1024;
       let totalSize = 0;
 
       for await (const chunk of file.file) {
         totalSize += chunk.length;
         if (totalSize > maxBytes) {
-          return reply.status(413).send({ error: `File too large (max ${config.maxFileSizeMb}MB)` });
+          return reply.status(413).send({ error: `File too large (max ${MAX_FILE_SIZE_MB}MB)` });
         }
         chunks.push(chunk);
       }
@@ -90,7 +69,7 @@ export function uploadRoutes(
         const id = crypto.randomUUID();
         await db.insert(attachments).values({
           id,
-          messageId: "__pending__",
+          messageId: null,
           filename: uniqueName,
           originalName: file.filename,
           mimeType: file.mimetype,

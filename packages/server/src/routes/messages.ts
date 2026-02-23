@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { eq, and, lt, desc, sql } from "drizzle-orm";
+import { eq, and, lt, desc, sql, isNull } from "drizzle-orm";
 import { MESSAGE_ROUTES, sendMessageSchema, editMessageSchema, getMessagesSchema } from "@migo/shared";
 import type { AppDatabase } from "../db/index.js";
 import { messages } from "../db/schema/messages.js";
@@ -143,7 +143,7 @@ export function messageRoutes(
           await db
             .update(attachments)
             .set({ messageId: id })
-            .where(and(eq(attachments.id, attachmentId), eq(attachments.messageId, "__pending__")))
+            .where(and(eq(attachments.id, attachmentId), isNull(attachments.messageId)))
             ;
         }
       }

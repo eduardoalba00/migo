@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, isNull } from "drizzle-orm";
 import { DM_ROUTES } from "@migo/shared";
 import type { AppDatabase } from "../db/index.js";
 import { dmChannels, dmMembers, dmMessages } from "../db/schema/dm-channels.js";
@@ -7,6 +7,7 @@ import { users } from "../db/schema/users.js";
 import type { AuthService } from "../services/auth.js";
 import { createAuthMiddleware } from "../middleware/auth.js";
 import { fastifyRoute } from "../lib/route-utils.js";
+import { attachments } from "../db/schema/attachments.js";
 import type { ConnectionManager } from "../ws/connection.js";
 
 function userToPublic(user: typeof users.$inferSelect) {
@@ -188,18 +189,34 @@ export function dmRoutes(
         }
       }
 
-      const result = msgs.map((row) => ({
-        id: row.dm_messages.id,
-        channelId: row.dm_messages.channelId,
-        author: userToPublic(row.users),
-        content: row.dm_messages.content,
-        editedAt: row.dm_messages.editedAt?.toISOString() ?? null,
-        createdAt: row.dm_messages.createdAt.toISOString(),
-        replyTo: null,
-        reactions: [],
-        attachments: [],
-        pinnedAt: null,
-      }));
+      const result = await Promise.all(
+        msgs.map(async (row) => {
+          const msgAttachments = await db
+            .select()
+            .from(attachments)
+            .where(eq(attachments.messageId, row.dm_messages.id));
+
+          return {
+            id: row.dm_messages.id,
+            channelId: row.dm_messages.channelId,
+            author: userToPublic(row.users),
+            content: row.dm_messages.content,
+            editedAt: row.dm_messages.editedAt?.toISOString() ?? null,
+            createdAt: row.dm_messages.createdAt.toISOString(),
+            replyTo: null,
+            reactions: [],
+            attachments: msgAttachments.map((a) => ({
+              id: a.id,
+              filename: a.filename,
+              originalName: a.originalName,
+              mimeType: a.mimeType,
+              size: a.size,
+              url: a.url,
+            })),
+            pinnedAt: null,
+          };
+        }),
+      );
 
       return reply.send(result.reverse());
     });
@@ -218,9 +235,12 @@ export function dmRoutes(
         return reply.status(403).send({ error: "Not a member of this DM" });
       }
 
-      const body = request.body as { content: string };
-      if (!body.content?.trim()) {
-        return reply.status(400).send({ error: "Content is required" });
+      const body = request.body as { content?: string; attachmentIds?: string[] };
+      const content = body.content?.trim() || "";
+      const attachmentIds = body.attachmentIds || [];
+
+      if (!content && attachmentIds.length === 0) {
+        return reply.status(400).send({ error: "Content or attachments required" });
       }
 
       const id = crypto.randomUUID();
@@ -230,25 +250,45 @@ export function dmRoutes(
         id,
         channelId,
         authorId: request.user.sub,
-        content: body.content.trim(),
+        content,
         createdAt: now,
       });
+
+      // Link pending attachments to this message
+      for (const attachmentId of attachmentIds) {
+        await db
+          .update(attachments)
+          .set({ messageId: id })
+          .where(and(eq(attachments.id, attachmentId), isNull(attachments.messageId)));
+      }
 
       // Update last message time
       await db.update(dmChannels).set({ lastMessageAt: now }).where(eq(dmChannels.id, channelId));
 
       const author = (await db.select().from(users).where(eq(users.id, request.user.sub)).then(r => r[0]))!;
 
+      const msgAttachments = await db
+        .select()
+        .from(attachments)
+        .where(eq(attachments.messageId, id));
+
       const message = {
         id,
         channelId,
         author: userToPublic(author),
-        content: body.content.trim(),
+        content,
         editedAt: null,
         createdAt: now.toISOString(),
         replyTo: null,
         reactions: [],
-        attachments: [],
+        attachments: msgAttachments.map((a) => ({
+          id: a.id,
+          filename: a.filename,
+          originalName: a.originalName,
+          mimeType: a.mimeType,
+          size: a.size,
+          url: a.url,
+        })),
         pinnedAt: null,
       };
 

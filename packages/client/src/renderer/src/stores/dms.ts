@@ -13,7 +13,7 @@ interface DmState {
   createDm: (recipientId: string) => Promise<DmChannel>;
   setActiveDm: (channelId: string | null) => void;
   fetchMessages: (channelId: string) => Promise<void>;
-  sendMessage: (channelId: string, content: string) => Promise<void>;
+  sendMessage: (channelId: string, content: string, attachmentIds?: string[]) => Promise<void>;
   handleDmMessageCreate: (message: Message) => void;
   handleDmChannelCreate: (channel: DmChannel) => void;
   clearDms: () => void;
@@ -53,8 +53,10 @@ export const useDmStore = create<DmState>()((set, get) => ({
     }));
   },
 
-  sendMessage: async (channelId, content) => {
-    await api.post(buildRoute(DM_ROUTES.MESSAGES_CREATE, { channelId }), { content });
+  sendMessage: async (channelId, content, attachmentIds) => {
+    const body: Record<string, unknown> = { content };
+    if (attachmentIds?.length) body.attachmentIds = attachmentIds;
+    await api.post(buildRoute(DM_ROUTES.MESSAGES_CREATE, { channelId }), body);
   },
 
   handleDmMessageCreate: (message) => {

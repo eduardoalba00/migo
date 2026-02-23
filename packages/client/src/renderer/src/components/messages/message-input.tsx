@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
-import { Plus, SendHorizontal, X, Smile, Paperclip } from "lucide-react";
+import { Plus, SendHorizontal, X, Smile } from "lucide-react";
 import { useMessageStore } from "@/stores/messages";
 import { useServerStore } from "@/stores/servers";
 import { EmojiPicker } from "@/components/messages/emoji-picker";
@@ -7,6 +7,7 @@ import { wsManager } from "@/lib/ws";
 import { WsOpcode, SERVER_ROUTES, UPLOAD_ROUTES, buildRoute } from "@migo/shared";
 import type { ServerMember } from "@migo/shared";
 import { api, resolveUploadUrl } from "@/lib/api";
+import { PendingFilePreview } from "@/components/messages/pending-file-preview";
 
 interface MessageInputProps {
   channelId: string;
@@ -250,25 +251,7 @@ export function MessageInput({ channelId, channelName }: MessageInputProps) {
             ))}
           </div>
         )}
-        {pendingFiles.length > 0 && (
-          <div className="flex flex-wrap gap-2 px-4 py-2 mb-1 bg-muted/50 rounded-t-lg">
-            {pendingFiles.map((file, i) => (
-              <div
-                key={`${file.name}-${i}`}
-                className="flex items-center gap-1.5 px-2 py-1 bg-background rounded text-xs border border-border"
-              >
-                <Paperclip className="h-3 w-3 text-muted-foreground shrink-0" />
-                <span className="truncate max-w-[150px]">{file.name}</span>
-                <button
-                  onClick={() => removePendingFile(i)}
-                  className="text-muted-foreground hover:text-foreground ml-0.5"
-                >
-                  <X className="h-3 w-3" />
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
+        <PendingFilePreview files={pendingFiles} onRemove={removePendingFile} />
         <input
           ref={fileInputRef}
           type="file"

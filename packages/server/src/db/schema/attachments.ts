@@ -1,11 +1,9 @@
 import { pgTable, text, integer, timestamp } from "drizzle-orm/pg-core";
-import { messages } from "./messages.js";
 
 export const attachments = pgTable("attachments", {
   id: text("id").primaryKey(),
-  messageId: text("message_id")
-    .notNull()
-    .references(() => messages.id, { onDelete: "cascade" }),
+  // Shared by both channel messages and DM messages — no FK constraint
+  messageId: text("message_id"),
   filename: text("filename").notNull(),
   originalName: text("original_name").notNull(),
   mimeType: text("mime_type").notNull(),
