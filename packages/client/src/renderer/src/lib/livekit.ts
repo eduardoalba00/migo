@@ -7,7 +7,7 @@ import {
   type RemoteTrack,
   LocalAudioTrack,
 } from "livekit-client";
-import { RnnoiseTrackProcessor } from "./rnnoise-processor";
+import { MicrophoneProcessor } from "./audio-processor";
 import { VoiceActivityDetector, type SpeakingChangeCallback } from "./livekit-vad";
 import { ScreenShareAudioPipeline } from "./livekit-screen-audio";
 
@@ -18,18 +18,13 @@ export type ScreenTrackCallback = (
   action: "add" | "remove",
 ) => void;
 
-export type NoiseSuppressionMode = "rnnoise" | "off";
-
 export class LiveKitManager {
   private room: Room | null = null;
   private screenTrackCallback: ScreenTrackCallback | null = null;
   private selectedOutputDeviceId: string | null = null;
   private userVolumes = new Map<string, number>();
 
-  // Noise suppression
-  private rnnoiseProcessor: RnnoiseTrackProcessor | null = null;
-
-  // Delegates
+  private micProcessor: MicrophoneProcessor | null = null;
   private vad = new VoiceActivityDetector();
   private screenAudio = new ScreenShareAudioPipeline();
 
@@ -90,17 +85,17 @@ export class LiveKitManager {
     this.vad.startPolling();
   }
 
+  private getLocalMicTrack(): LocalAudioTrack | undefined {
+    const pub = this.room?.localParticipant.getTrackPublication(Track.Source.Microphone);
+    return pub?.track as LocalAudioTrack | undefined;
+  }
+
   async disconnect(): Promise<void> {
     this.vad.stopPolling();
     this.vad.cleanupAll();
-    // Clean up RNNoise processor before disconnecting
-    if (this.rnnoiseProcessor) {
-      const localPub = this.room?.localParticipant.getTrackPublication(Track.Source.Microphone);
-      const localTrack = localPub?.track as LocalAudioTrack | undefined;
-      if (localTrack) {
-        await localTrack.stopProcessor().catch(() => {});
-      }
-      this.rnnoiseProcessor = null;
+    if (this.micProcessor) {
+      await this.getLocalMicTrack()?.stopProcessor().catch(() => {});
+      this.micProcessor = null;
     }
     await this.screenAudio.stop(this.room);
     if (this.audioContext) {
@@ -263,28 +258,21 @@ export class LiveKitManager {
     await this.room.localParticipant.setScreenShareEnabled(false);
   }
 
-  async setNoiseSuppression(enabled: boolean): Promise<NoiseSuppressionMode> {
-    if (!this.room) return "off";
+  async setAudioProcessing(enabled: boolean): Promise<void> {
+    const localTrack = this.getLocalMicTrack();
+    if (!this.room || !localTrack) return;
 
-    const localPub = this.room.localParticipant.getTrackPublication(Track.Source.Microphone);
-    const localTrack = localPub?.track as LocalAudioTrack | undefined;
-    if (!localTrack) return "off";
-
-    if (enabled) {
-      if (!this.rnnoiseProcessor) {
-        this.rnnoiseProcessor = new RnnoiseTrackProcessor();
-      }
-      await localTrack.setProcessor(this.rnnoiseProcessor);
-    } else {
+    if (enabled && !this.micProcessor) {
+      this.micProcessor = new MicrophoneProcessor();
+      await localTrack.setProcessor(this.micProcessor);
+    } else if (!enabled && this.micProcessor) {
       await localTrack.stopProcessor();
+      this.micProcessor = null;
     }
 
     // Rebuild VAD analyser so it reads from the processed (or raw) track
-    const identity = this.room.localParticipant.identity;
-    this.vad.removeAnalyser(identity);
+    this.vad.removeAnalyser(this.room.localParticipant.identity);
     this.setupLocalMicAnalyser();
-
-    return enabled ? "rnnoise" : "off";
   }
 
   static async getAudioDevices(): Promise<{ inputs: MediaDeviceInfo[]; outputs: MediaDeviceInfo[] }> {
@@ -298,10 +286,11 @@ export class LiveKitManager {
   private setupLocalMicAnalyser(): void {
     if (!this.room || !this.audioContext) return;
 
-    const localPub = this.room.localParticipant.getTrackPublication(Track.Source.Microphone);
-    const localTrack = localPub?.track?.mediaStreamTrack;
-    if (localTrack) {
-      this.vad.createAnalyser(this.room.localParticipant.identity, localTrack);
+    // Use the processed track (post noise gate) so VAD matches what others hear
+    const track = this.micProcessor?.processedTrack
+      ?? this.getLocalMicTrack()?.mediaStreamTrack;
+    if (track) {
+      this.vad.createAnalyser(this.room.localParticipant.identity, track);
     }
   }
 

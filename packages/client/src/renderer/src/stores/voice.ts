@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { WsOpcode } from "@migo/shared";
 import type { VoiceState, VoiceChannelUser } from "@migo/shared";
-import { livekitManager, type NoiseSuppressionMode } from "@/lib/livekit";
+import { livekitManager } from "@/lib/livekit";
 import { wsManager } from "@/lib/ws";
 import { voiceSignal } from "@/lib/voice-signal";
 import {
@@ -28,9 +28,7 @@ export interface VoiceStoreState {
   speakingUsers: Set<string>;
   userVolumes: Record<string, number>;
 
-  // Noise suppression
   noiseSuppression: boolean;
-  noiseSuppressionMode: NoiseSuppressionMode;
   toggleNoiseSuppression: () => Promise<void>;
 
   // Screen sharing
@@ -77,8 +75,7 @@ export const useVoiceStore = create<VoiceStoreState>()((set, get) => ({
   isConnecting: false,
   speakingUsers: new Set<string>(),
   userVolumes: {},
-  noiseSuppression: localStorage.getItem("migo-noise-suppression") === "true",
-  noiseSuppressionMode: "off" as NoiseSuppressionMode,
+  noiseSuppression: localStorage.getItem("migo-noise-suppression") !== "false",
   isScreenSharing: false,
   screenShareTracks: {},
   focusedScreenShareUserId: null,
@@ -96,8 +93,7 @@ export const useVoiceStore = create<VoiceStoreState>()((set, get) => ({
 
     if (get().currentChannelId) {
       try {
-        const mode = await livekitManager.setNoiseSuppression(newValue);
-        set({ noiseSuppressionMode: mode });
+        await livekitManager.setAudioProcessing(newValue);
       } catch (err) {
         console.error("Failed to toggle noise suppression:", err);
       }
@@ -185,12 +181,9 @@ export const useVoiceStore = create<VoiceStoreState>()((set, get) => ({
       if (savedInput) livekitManager.setInputDevice(savedInput);
       if (savedOutput) livekitManager.setOutputDevice(savedOutput);
 
-      // 6. Apply noise suppression if saved preference is enabled
+      // 6. Apply noise suppression if enabled
       if (get().noiseSuppression) {
-        try {
-          const mode = await livekitManager.setNoiseSuppression(true);
-          set({ noiseSuppressionMode: mode });
-        } catch {}
+        await livekitManager.setAudioProcessing(true).catch(() => {});
       }
 
       set({ isConnecting: false });
@@ -257,7 +250,6 @@ export const useVoiceStore = create<VoiceStoreState>()((set, get) => ({
       isDeafened: false,
       isConnecting: false,
       speakingUsers: new Set(),
-      noiseSuppressionMode: "off" as NoiseSuppressionMode,
       isScreenSharing: false,
       isSessionMode: false,
       screenShareSourceId: null,
