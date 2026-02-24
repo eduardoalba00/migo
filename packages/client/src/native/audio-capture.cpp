@@ -133,16 +133,6 @@ static void SendToJS(float *samples, size_t sampleCount) {
       });
 }
 
-// ─── Send silence to keep the ring buffer fed during audio gaps ─────────────
-
-static void SendSilence() {
-  // 10ms at 48kHz stereo = 480 frames * 2 channels
-  const size_t SILENCE_SAMPLES = 960;
-  float *silence = new float[SILENCE_SAMPLES];
-  memset(silence, 0, SILENCE_SAMPLES * sizeof(float));
-  SendToJS(silence, SILENCE_SAMPLES);
-}
-
 // ─── Drain all available packets from WASAPI buffer ────────────────────────────
 // Returns: -1 on error, 0+ = number of packets drained
 
@@ -184,24 +174,20 @@ static int DrainPackets() {
 
 static void CaptureLoop() {
   if (g_eventDriven) {
-    // Event-driven mode: wait for WASAPI buffer event or stop event.
-    // 10ms timeout ensures we inject silence often enough to prevent
-    // ring buffer underruns when the target app produces no audio.
+    // Event-driven mode: block until WASAPI has data or stop is signaled.
+    // No silence injection — the AudioWorklet ring buffer outputs zeros on
+    // underrun, and audio resumes instantly when data arrives.
     HANDLE handles[] = {g_bufferEvent, g_stopEvent};
     while (true) {
-      DWORD result = WaitForMultipleObjects(2, handles, FALSE, 10);
+      DWORD result = WaitForMultipleObjects(2, handles, FALSE, INFINITE);
       if (result == WAIT_OBJECT_0 + 1) break; // stop event signaled
       if (result == WAIT_FAILED) break;
-      int drained = DrainPackets();
-      if (drained < 0) break;
-      if (drained == 0) SendSilence();
+      if (DrainPackets() < 0) break;
     }
   } else {
     // Polling fallback: used when event-driven mode is not supported.
     while (g_running.load()) {
-      int drained = DrainPackets();
-      if (drained < 0) break;
-      if (drained == 0) SendSilence();
+      if (DrainPackets() < 0) break;
       Sleep(10);
     }
   }
