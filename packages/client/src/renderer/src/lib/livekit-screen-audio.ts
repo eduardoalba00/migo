@@ -9,7 +9,9 @@ import { Room, Track, LocalAudioTrack } from "livekit-client";
 // - Diagnostic counters (underruns, overruns) reported periodically to renderer
 const WORKLET_SOURCE = `
 const RING_BUFFER_SIZE = 48000 * 2 * 4 + 1; // ~4 seconds stereo + sentinel
-const PRE_BUFFER_SAMPLES = 1920;             // ~20ms pre-buffer (2 WASAPI chunks)
+const PRE_BUFFER_SAMPLES = 4800;             // ~50ms pre-buffer (5 WASAPI chunks)
+const DRIFT_THRESHOLD = 4800;                // skip if buffer exceeds 50ms
+const DRIFT_TARGET = 1920;                   // skip down to 20ms
 
 class AudioCaptureProcessor extends AudioWorkletProcessor {
   constructor() {
@@ -20,6 +22,7 @@ class AudioCaptureProcessor extends AudioWorkletProcessor {
     this.started = false;
     this.underrunCount = 0;
     this.overrunSamples = 0;
+    this.driftCorrections = 0;
     this.processCount = 0;
 
     this.port.onmessage = (event) => {
@@ -80,6 +83,14 @@ class AudioCaptureProcessor extends AudioWorkletProcessor {
         right[i] = this.buffer[this.readPos];
         this.readPos = (this.readPos + 1) % RING_BUFFER_SIZE;
       }
+
+      // Drift correction: skip stale samples to resync after underrun recovery
+      const postReadAvail = this._available();
+      if (postReadAvail > DRIFT_THRESHOLD) {
+        const skip = postReadAvail - DRIFT_TARGET;
+        this.readPos = (this.readPos + skip) % RING_BUFFER_SIZE;
+        this.driftCorrections++;
+      }
     } else {
       this.underrunCount++;
       left.fill(0);
@@ -93,6 +104,7 @@ class AudioCaptureProcessor extends AudioWorkletProcessor {
         type: 'stats',
         underruns: this.underrunCount,
         overruns: this.overrunSamples,
+        driftCorrections: this.driftCorrections,
         bufferLevel: this._available(),
         processCount: this.processCount,
       });
@@ -134,10 +146,11 @@ export class ScreenShareAudioPipeline {
       // Listen for diagnostic stats from the worklet
       this.screenAudioWorklet.port.onmessage = (event) => {
         if (event.data?.type === "stats") {
-          const { underruns, overruns, bufferLevel, processCount } = event.data;
-          if (underruns > 0 || overruns > 0) {
+          const { underruns, overruns, driftCorrections, bufferLevel, processCount } = event.data;
+          if (underruns > 0 || overruns > 0 || driftCorrections > 0) {
             console.warn(
               `[screen-audio] underruns=${underruns} overruns=${overruns} ` +
+                `driftCorrections=${driftCorrections} ` +
                 `bufferLevel=${bufferLevel} processCount=${processCount}`,
             );
           }

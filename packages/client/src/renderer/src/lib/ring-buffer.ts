@@ -19,6 +19,7 @@ export class RingBuffer {
   // Diagnostic counters
   private _overrunSamples = 0;
   private _underrunCount = 0;
+  private _driftCorrections = 0;
 
   constructor(size: number) {
     this._size = size;
@@ -49,6 +50,11 @@ export class RingBuffer {
   /** Cumulative count of underrun events (process() called with insufficient data). */
   get underrunCount(): number {
     return this._underrunCount;
+  }
+
+  /** Cumulative count of drift correction skip events. */
+  get driftCorrections(): number {
+    return this._driftCorrections;
   }
 
   /**
@@ -103,11 +109,25 @@ export class RingBuffer {
     return true;
   }
 
+  /**
+   * If available samples exceed `threshold`, advance readPos to bring
+   * the buffer level down to `target`. Returns the number of samples skipped.
+   */
+  correctDrift(threshold: number, target: number): number {
+    const avail = this.available;
+    if (avail <= threshold) return 0;
+    const skip = avail - target;
+    this.readPos = (this.readPos + skip) % this._size;
+    this._driftCorrections++;
+    return skip;
+  }
+
   /** Reset buffer state and counters. */
   reset(): void {
     this.writePos = 0;
     this.readPos = 0;
     this._overrunSamples = 0;
     this._underrunCount = 0;
+    this._driftCorrections = 0;
   }
 }

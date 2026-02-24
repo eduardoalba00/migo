@@ -16,6 +16,8 @@ export interface AudioQualityReport {
   discontinuities: number;
   /** Whether any non-zero samples were present in the output. */
   signalPresent: boolean;
+  /** Number of drift correction skip events. */
+  driftCorrections: number;
 }
 
 /**
@@ -151,6 +153,8 @@ export function simulatePipeline(
   processFrames: number,
   bufferSize: number,
   preBufferThreshold = 0,
+  driftThreshold = 0,
+  driftTarget = 0,
 ): AudioQualityReport {
   // Simple ring buffer simulation matching RingBuffer class behavior
   const buffer = new Float32Array(bufferSize);
@@ -158,6 +162,7 @@ export function simulatePipeline(
   let readPos = 0;
   let overrunSamples = 0;
   let underrunCount = 0; // mid-stream underruns only (while chunks are still arriving)
+  let driftCorrections = 0;
   let started = preBufferThreshold === 0;
   let allChunksDelivered = false;
 
@@ -227,6 +232,13 @@ export function simulatePipeline(
         readPos = (readPos + 1) % bufferSize;
       }
       currentGapMs = 0;
+
+      // Drift correction: skip stale samples if buffer is overfull
+      if (driftThreshold > 0 && available() > driftThreshold) {
+        const skip = available() - driftTarget;
+        readPos = (readPos + skip) % bufferSize;
+        driftCorrections++;
+      }
     } else {
       // Only count as underrun if we're still expecting data (mid-stream)
       if (!allChunksDelivered) {
@@ -253,5 +265,6 @@ export function simulatePipeline(
     maxGapMs,
     discontinuities: 0, // Caller can run detectDiscontinuities separately
     signalPresent,
+    driftCorrections,
   };
 }

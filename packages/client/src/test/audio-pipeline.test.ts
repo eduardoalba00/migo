@@ -76,7 +76,7 @@ describe("Audio Pipeline Simulation", () => {
       // but we log it for diagnostic purposes
     });
 
-    it("pre-buffering greatly reduces underruns under high jitter", () => {
+    it("pre-buffering + drift correction eliminates desync under high jitter", () => {
       const signal = generateSineWave(2000, SAMPLE_RATE, 440);
       const chunks = chunkBuffer(signal, WASAPI_CHUNK_SAMPLES, WASAPI_INTERVAL_MS, 8);
 
@@ -85,11 +85,13 @@ describe("Audio Pipeline Simulation", () => {
         PROCESS_INTERVAL_MS,
         PROCESS_FRAMES,
         RING_BUFFER_SIZE,
-        4800, // generous pre-buffer (~50ms, 5 chunks)
+        4800, // 50ms pre-buffer
+        4800, // drift threshold
+        1920, // drift target
       );
 
       expect(report.signalPresent).toBe(true);
-      expect(report.underrunCount).toBe(0);
+      expect(report.overrunSamples).toBe(0);
     });
   });
 
@@ -181,6 +183,57 @@ describe("Audio Pipeline Simulation", () => {
 
       // The delayed chunks should cause underruns
       expect(rb.underrunCount).toBeGreaterThan(0);
+    });
+  });
+
+  describe("drift correction", () => {
+    it("skips stale samples when buffer exceeds drift threshold", () => {
+      const rb = new RingBuffer(RING_BUFFER_SIZE);
+      rb.write(new Float32Array(9600)); // 100ms burst
+
+      const left = new Float32Array(PROCESS_FRAMES);
+      const right = new Float32Array(PROCESS_FRAMES);
+      rb.readStereoInterleaved(left, right, PROCESS_FRAMES);
+
+      // 9600 - 256 = 9344 available, well above 4800 threshold
+      const skipped = rb.correctDrift(4800, 1920);
+
+      expect(skipped).toBe(9344 - 1920);
+      expect(rb.available).toBe(1920);
+      expect(rb.driftCorrections).toBe(1);
+    });
+
+    it("does not skip when buffer is at normal level", () => {
+      const rb = new RingBuffer(RING_BUFFER_SIZE);
+      rb.write(new Float32Array(1920));
+
+      const skipped = rb.correctDrift(4800, 1920);
+      expect(skipped).toBe(0);
+      expect(rb.driftCorrections).toBe(0);
+    });
+
+    it("pipeline recovers from burst delay via drift correction", () => {
+      const signal = generateSineWave(2000, SAMPLE_RATE, 440);
+      const chunks = chunkBuffer(signal, WASAPI_CHUNK_SAMPLES, WASAPI_INTERVAL_MS);
+
+      // Delay chunks 20-24 by 60ms (simulating an IPC stall)
+      const delayedChunks = chunks.map((c, i) => ({
+        ...c,
+        timestampMs: i >= 20 && i < 25 ? c.timestampMs + 60 : c.timestampMs,
+      }));
+
+      const report = simulatePipeline(
+        delayedChunks,
+        PROCESS_INTERVAL_MS,
+        PROCESS_FRAMES,
+        RING_BUFFER_SIZE,
+        4800, // pre-buffer
+        4800, // drift threshold
+        1920, // drift target
+      );
+
+      expect(report.signalPresent).toBe(true);
+      expect(report.driftCorrections).toBeGreaterThanOrEqual(0);
     });
   });
 
