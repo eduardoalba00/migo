@@ -11,7 +11,19 @@ interface VoiceUserProps {
 export function VoiceUser({ user }: VoiceUserProps) {
   const speaking = useVoiceStore((s) => s.speakingUsers.has(user.userId));
   const focusScreenShare = useVoiceStore((s) => s.focusScreenShare);
+  const joinStream = useVoiceStore((s) => s.joinStream);
+  const isJoined = useVoiceStore((s) => s.joinedStreams.has(user.userId));
   const avatarSrc = resolveUploadUrl(user.avatarUrl);
+
+  const handleClick = user.screenSharing
+    ? () => {
+        if (isJoined) {
+          focusScreenShare(user.userId);
+        } else {
+          joinStream(user.userId);
+        }
+      }
+    : undefined;
 
   return (
     <div
@@ -19,7 +31,7 @@ export function VoiceUser({ user }: VoiceUserProps) {
         "flex items-center gap-2 px-2 py-0.5",
         user.screenSharing && "cursor-pointer hover:bg-sidebar-accent/50 rounded-md",
       )}
-      onClick={user.screenSharing ? () => focusScreenShare(user.userId) : undefined}
+      onClick={handleClick}
     >
       <div
         className={cn(

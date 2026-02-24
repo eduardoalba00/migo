@@ -36,6 +36,7 @@ export interface VoiceStoreState {
   screenShareTracks: Record<string, MediaStreamTrack>;
   focusedScreenShareUserId: string | null;
   showScreenSharePicker: boolean;
+  joinedStreams: Set<string>;
 
   // Screen share audio volume (independent from mic volume)
   screenShareVolumes: Record<string, number>;
@@ -64,6 +65,8 @@ export interface VoiceStoreState {
   handleScreenShareStop: (data: { userId: string }) => void;
   focusScreenShare: (userId: string) => void;
   unfocusScreenShare: () => void;
+  joinStream: (userId: string) => void;
+  unjoinStream: (userId: string) => void;
 }
 
 export const useVoiceStore = create<VoiceStoreState>()((set, get) => ({
@@ -80,6 +83,7 @@ export const useVoiceStore = create<VoiceStoreState>()((set, get) => ({
   screenShareTracks: {},
   focusedScreenShareUserId: null,
   showScreenSharePicker: false,
+  joinedStreams: new Set<string>(),
   screenShareVolumes: {},
   screenShareMuted: {},
   isSessionMode: false,
@@ -259,6 +263,7 @@ export const useVoiceStore = create<VoiceStoreState>()((set, get) => ({
       showScreenSharePicker: false,
       screenShareVolumes: {},
       screenShareMuted: {},
+      joinedStreams: new Set<string>(),
     });
   },
 
@@ -475,5 +480,43 @@ export const useVoiceStore = create<VoiceStoreState>()((set, get) => ({
 
   unfocusScreenShare: () => {
     set({ focusedScreenShareUserId: null });
+  },
+
+  joinStream: (userId: string) => {
+    const joined = new Set(get().joinedStreams);
+    joined.add(userId);
+    livekitManager.joinedStreams.add(userId);
+
+    // Local user rejoining their own stream — re-add the local track
+    const selfId = useAuthStore.getState().user?.id;
+    if (userId === selfId && get().isScreenSharing) {
+      const localTrack = livekitManager.getLocalScreenShareTrack();
+      if (localTrack) {
+        set((s) => ({
+          joinedStreams: joined,
+          screenShareTracks: { ...s.screenShareTracks, [userId]: localTrack },
+        }));
+        return;
+      }
+    }
+
+    set({ joinedStreams: joined });
+    livekitManager.subscribeScreenShare(userId);
+  },
+
+  unjoinStream: (userId: string) => {
+    const joined = new Set(get().joinedStreams);
+    joined.delete(userId);
+    livekitManager.unsubscribeScreenShare(userId);
+    set((s) => {
+      const screenShareTracks = { ...s.screenShareTracks };
+      delete screenShareTracks[userId];
+      return {
+        joinedStreams: joined,
+        screenShareTracks,
+        focusedScreenShareUserId:
+          s.focusedScreenShareUserId === userId ? null : s.focusedScreenShareUserId,
+      };
+    });
   },
 }));

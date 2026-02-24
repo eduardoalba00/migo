@@ -38,6 +38,9 @@ export class LiveKitManager {
 
   private audioContext: AudioContext | null = null;
 
+  // Screen shares the user has opted into viewing
+  joinedStreams = new Set<string>();
+
   getRoom(): Room | null {
     return this.room;
   }
@@ -119,6 +122,8 @@ export class LiveKitManager {
       }
     }
     this.screenShareAudioElements.clear();
+
+    this.joinedStreams.clear();
 
     if (this.room) {
       await this.room.disconnect();
@@ -258,6 +263,50 @@ export class LiveKitManager {
     await this.room.localParticipant.setScreenShareEnabled(false);
   }
 
+  subscribeScreenShare(userId: string): void {
+    this.joinedStreams.add(userId);
+    if (!this.room) return;
+
+    for (const participant of this.room.remoteParticipants.values()) {
+      if (participant.identity !== userId) continue;
+      for (const pub of participant.trackPublications.values()) {
+        if (
+          pub.source === Track.Source.ScreenShare ||
+          pub.source === Track.Source.ScreenShareAudio
+        ) {
+          (pub as RemoteTrackPublication).setSubscribed(true);
+        }
+      }
+    }
+  }
+
+  unsubscribeScreenShare(userId: string): void {
+    this.joinedStreams.delete(userId);
+    if (!this.room) return;
+
+    for (const participant of this.room.remoteParticipants.values()) {
+      if (participant.identity !== userId) continue;
+      for (const pub of participant.trackPublications.values()) {
+        if (
+          pub.source === Track.Source.ScreenShare ||
+          pub.source === Track.Source.ScreenShareAudio
+        ) {
+          (pub as RemoteTrackPublication).setSubscribed(false);
+        }
+      }
+    }
+
+    // Clean up screen share audio elements for this user
+    const ssElements = this.screenShareAudioElements.get(userId);
+    if (ssElements) {
+      for (const el of ssElements) {
+        el.srcObject = null;
+        el.remove();
+      }
+      this.screenShareAudioElements.delete(userId);
+    }
+  }
+
   async setAudioProcessing(enabled: boolean): Promise<void> {
     const localTrack = this.getLocalMicTrack();
     if (!this.room || !localTrack) return;
@@ -333,6 +382,20 @@ export class LiveKitManager {
     this.room.on(
       RoomEvent.TrackSubscribed,
       (track: RemoteTrack, publication: RemoteTrackPublication, participant: RemoteParticipant) => {
+        // Gate screen share tracks: if user hasn't joined this stream, unsubscribe immediately
+        const isScreenShareTrack =
+          publication.source === Track.Source.ScreenShare ||
+          publication.source === Track.Source.ScreenShareAudio;
+
+        if (isScreenShareTrack) {
+          const streamUserId =
+            this.extractScreenShareUserId(participant.identity) ?? participant.identity;
+          if (!this.joinedStreams.has(streamUserId)) {
+            publication.setSubscribed(false);
+            return;
+          }
+        }
+
         if (track.kind === Track.Kind.Audio) {
           const el = track.attach();
           if (this.selectedOutputDeviceId && "setSinkId" in el) {

@@ -68,14 +68,25 @@ export function MainContent() {
 
   // Voice channel view
   if (isVoiceChannel) {
-    const hasScreenShares = Object.keys(screenShareTracks).length > 0;
+    // Compute all users with screenSharing: true in the current voice channel
+    const currentChannelUsers = currentVoiceChannelId
+      ? channelUsers[currentVoiceChannelId] ?? {}
+      : {};
+    const streamingUserIds = Object.values(currentChannelUsers)
+      .filter((u) => u.screenSharing)
+      .map((u) => u.userId);
+    const hasScreenShares = streamingUserIds.length > 0;
 
     return (
       <div className="flex flex-1 overflow-hidden">
         <div className="flex flex-1 flex-col overflow-hidden">
           <ChannelHeader channel={activeChannel} />
           {hasScreenShares ? (
-            <ScreenShareViewer tracks={screenShareTracks} getUserName={getUserName} />
+            <ScreenShareViewer
+              tracks={screenShareTracks}
+              streamingUserIds={streamingUserIds}
+              getUserName={getUserName}
+            />
           ) : (
             <div className="flex flex-1 items-center justify-center">
               <div className="text-center text-muted-foreground space-y-3">

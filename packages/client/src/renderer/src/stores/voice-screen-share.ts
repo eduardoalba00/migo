@@ -96,10 +96,15 @@ export function createScreenShareActions(set: Set, get: Get) {
         };
 
         if (selfId && localTrack) {
+          // Auto-join own stream so sharer always sees it
+          const joined = new Set(get().joinedStreams);
+          joined.add(selfId);
+          livekitManager.joinedStreams.add(selfId);
           set((s) => ({
             ...trackUpdate,
             screenShareTracks: { ...s.screenShareTracks, [selfId]: localTrack },
             focusedScreenShareUserId: selfId,
+            joinedStreams: joined,
           }));
         } else {
           set(trackUpdate);
@@ -131,12 +136,18 @@ export function createScreenShareActions(set: Set, get: Get) {
       set((s) => {
         const screenShareTracks = { ...s.screenShareTracks };
         if (selfId) delete screenShareTracks[selfId];
+        const joined = new Set(s.joinedStreams);
+        if (selfId) {
+          joined.delete(selfId);
+          livekitManager.joinedStreams.delete(selfId);
+        }
         return {
           screenShareTracks,
           isScreenSharing: false,
           isSessionMode: false,
           screenShareSourceId: null,
           screenShareSourceType: null,
+          joinedStreams: joined,
           focusedScreenShareUserId:
             s.focusedScreenShareUserId === selfId ? null : s.focusedScreenShareUserId,
         };
@@ -185,6 +196,9 @@ export function createScreenShareActions(set: Set, get: Get) {
 
       // Track cleanup is handled by LiveKit TrackUnsubscribed automatically
 
+      // Remove stopped user from joinedStreams
+      livekitManager.joinedStreams.delete(data.userId);
+
       set((s) => {
         // Update channelUsers to clear screenSharing flag
         const channelUsers = { ...s.channelUsers };
@@ -200,8 +214,12 @@ export function createScreenShareActions(set: Set, get: Get) {
           }
         }
 
+        const joined = new Set(s.joinedStreams);
+        joined.delete(data.userId);
+
         return {
           channelUsers,
+          joinedStreams: joined,
           focusedScreenShareUserId:
             s.focusedScreenShareUserId === data.userId
               ? null

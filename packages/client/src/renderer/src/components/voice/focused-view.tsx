@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Maximize2, Minimize2, ArrowLeft, Volume2, VolumeX } from "lucide-react";
+import { Maximize2, Minimize2, ArrowLeft, LogOut, Volume2, VolumeX } from "lucide-react";
 import { RoomEvent } from "livekit-client";
 import { useVoiceStore } from "@/stores/voice";
 import { useAuthStore } from "@/stores/auth";
@@ -17,6 +17,7 @@ export interface FocusedViewProps {
   sharerUserId: string;
   showBackButton: boolean;
   onBack: () => void;
+  onLeave?: () => void;
   isFullscreen: boolean;
   onToggleFullscreen: () => void;
 }
@@ -28,6 +29,7 @@ export function FocusedView({
   sharerUserId,
   showBackButton,
   onBack,
+  onLeave,
   isFullscreen,
   onToggleFullscreen,
 }: FocusedViewProps) {
@@ -182,6 +184,16 @@ export function FocusedView({
         style={{ zIndex: 20 }}
       >
         <AnnotationToolbar />
+        {/* Leave stream button */}
+        {onLeave && (
+          <button
+            onClick={onLeave}
+            className="bg-black/70 backdrop-blur-sm rounded-lg p-2.5 text-white hover:bg-red-600 transition-colors"
+            title="Leave stream"
+          >
+            <LogOut className="h-5 w-5" />
+          </button>
+        )}
         {/* Volume control — hover zone wraps both icon and slider popup */}
         <div
           className="relative flex flex-col items-center"
