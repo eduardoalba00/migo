@@ -122,7 +122,7 @@ registerProcessor('rnnoise-processor', RnnoiseProcessor);
 // ---------------------------------------------------------------------------
 
 const NOISE_GATE_WORKLET = `
-const THRESHOLD_DB = -50;
+const THRESHOLD_DB = -40;
 const ATTACK_MS = 5;
 const RELEASE_MS = 150;
 const HOLD_MS = 100;

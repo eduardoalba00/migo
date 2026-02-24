@@ -109,57 +109,75 @@ static void setError(const char *fmt, HRESULT hr) {
   g_lastError = buf;
 }
 
-// ─── Drain all available packets from WASAPI buffer ────────────────────────────
+// ─── Send a float buffer to JS via ThreadSafeFunction ───────────────────────
 
-static bool DrainPackets() {
+struct CaptureData {
+  float *samples;
+  size_t count;
+};
+
+static void SendToJS(float *samples, size_t sampleCount) {
+  if (!g_tsfn) {
+    delete[] samples;
+    return;
+  }
+  auto *cd = new CaptureData{samples, sampleCount};
+  g_tsfn->NonBlockingCall(cd,
+      [](Napi::Env env, Napi::Function jsCallback, CaptureData *data) {
+        auto ab = Napi::ArrayBuffer::New(env, data->count * sizeof(float));
+        memcpy(ab.Data(), data->samples, data->count * sizeof(float));
+        auto f32 = Napi::Float32Array::New(env, data->count, ab, 0);
+        delete[] data->samples;
+        delete data;
+        jsCallback.Call({f32});
+      });
+}
+
+// ─── Send silence to keep the ring buffer fed during audio gaps ─────────────
+
+static void SendSilence() {
+  // 10ms at 48kHz stereo = 480 frames * 2 channels
+  const size_t SILENCE_SAMPLES = 960;
+  float *silence = new float[SILENCE_SAMPLES];
+  memset(silence, 0, SILENCE_SAMPLES * sizeof(float));
+  SendToJS(silence, SILENCE_SAMPLES);
+}
+
+// ─── Drain all available packets from WASAPI buffer ────────────────────────────
+// Returns: -1 on error, 0+ = number of packets drained
+
+static int DrainPackets() {
   UINT32 packetLength = 0;
   HRESULT hr = g_captureClient->GetNextPacketSize(&packetLength);
-  if (FAILED(hr)) return false;
+  if (FAILED(hr)) return -1;
 
+  int count = 0;
   while (packetLength > 0) {
     BYTE *pData = nullptr;
     UINT32 numFrames = 0;
     DWORD flags = 0;
 
     hr = g_captureClient->GetBuffer(&pData, &numFrames, &flags, nullptr, nullptr);
-    if (FAILED(hr)) return false;
+    if (FAILED(hr)) return -1;
 
     g_dataCount.fetch_add(1);
+    count++;
 
-    if (g_tsfn) {
-      size_t sampleCount = numFrames * 2;
-      float *copy = new float[sampleCount];
-      if (flags & AUDCLNT_BUFFERFLAGS_SILENT) {
-        memset(copy, 0, sampleCount * sizeof(float));
-      } else {
-        memcpy(copy, pData, sampleCount * sizeof(float));
-      }
-
-      // Pack sample count + data pointer for the JS callback
-      struct CaptureData {
-        float *samples;
-        size_t count;
-      };
-      auto *cd = new CaptureData{copy, sampleCount};
-
-      g_tsfn->NonBlockingCall(cd,
-          [](Napi::Env env, Napi::Function jsCallback, CaptureData *data) {
-            // Copy into a new JS-owned ArrayBuffer (no custom finalizer)
-            auto ab = Napi::ArrayBuffer::New(env, data->count * sizeof(float));
-            memcpy(ab.Data(), data->samples, data->count * sizeof(float));
-            auto f32 = Napi::Float32Array::New(env, data->count, ab, 0);
-            delete[] data->samples;
-            delete data;
-            jsCallback.Call({f32});
-          });
+    size_t sampleCount = numFrames * 2;
+    float *copy = new float[sampleCount];
+    if (flags & AUDCLNT_BUFFERFLAGS_SILENT) {
+      memset(copy, 0, sampleCount * sizeof(float));
+    } else {
+      memcpy(copy, pData, sampleCount * sizeof(float));
     }
+    SendToJS(copy, sampleCount);
 
     g_captureClient->ReleaseBuffer(numFrames);
     hr = g_captureClient->GetNextPacketSize(&packetLength);
-    if (FAILED(hr)) return false;
+    if (FAILED(hr)) return -1;
   }
 
-  return true;
+  return count;
 }
 
 // ─── Capture loop: event-driven with polling fallback ──────────────────────────
@@ -167,21 +185,24 @@ static bool DrainPackets() {
 static void CaptureLoop() {
   if (g_eventDriven) {
     // Event-driven mode: wait for WASAPI buffer event or stop event.
-    // Processes packets immediately when they arrive — no polling delay.
+    // 10ms timeout ensures we inject silence often enough to prevent
+    // ring buffer underruns when the target app produces no audio.
     HANDLE handles[] = {g_bufferEvent, g_stopEvent};
     while (true) {
-      DWORD result = WaitForMultipleObjects(2, handles, FALSE, 200);
+      DWORD result = WaitForMultipleObjects(2, handles, FALSE, 10);
       if (result == WAIT_OBJECT_0 + 1) break; // stop event signaled
       if (result == WAIT_FAILED) break;
-      // WAIT_OBJECT_0 (buffer ready) or WAIT_TIMEOUT — drain packets either way
-      if (!DrainPackets()) break;
+      int drained = DrainPackets();
+      if (drained < 0) break;
+      if (drained == 0) SendSilence();
     }
   } else {
-    // Polling fallback: Sleep(1) between polls.
-    // Used when event-driven mode is not supported by the audio driver.
+    // Polling fallback: used when event-driven mode is not supported.
     while (g_running.load()) {
-      if (!DrainPackets()) break;
-      Sleep(1);
+      int drained = DrainPackets();
+      if (drained < 0) break;
+      if (drained == 0) SendSilence();
+      Sleep(10);
     }
   }
 }

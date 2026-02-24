@@ -1,11 +1,13 @@
-// Voice activity detection thresholds
-const SPEAKING_THRESHOLD = 15;          // frequency bin average (0-255 range)
+// Voice activity detection — RMS-based, matches any audible audio
+// Uses time-domain waveform analysis (not FFT frequency bins) so the
+// speaking ring activates whenever non-silent audio is actually present.
+const RMS_THRESHOLD = 0.01;             // linear amplitude (~-40 dB)
 const SILENCE_DELAY_MS = 200;           // hold indicator briefly after silence
 
 interface AudioAnalysis {
   analyser: AnalyserNode;
   source: MediaStreamAudioSourceNode;
-  dataArray: Uint8Array<ArrayBuffer>;
+  dataArray: Float32Array;
 }
 
 export type SpeakingChangeCallback = (speakingUserIds: Set<string>) => void;
@@ -33,13 +35,12 @@ export class VoiceActivityDetector {
     const source = this.audioContext.createMediaStreamSource(stream);
     const analyser = this.audioContext.createAnalyser();
     analyser.fftSize = 256;
-    analyser.smoothingTimeConstant = 0.3;
     source.connect(analyser);
 
     this.analysers.set(identity, {
       analyser,
       source,
-      dataArray: new Uint8Array(analyser.frequencyBinCount),
+      dataArray: new Float32Array(analyser.fftSize),
     });
   }
 
@@ -76,15 +77,16 @@ export class VoiceActivityDetector {
       let changed = false;
 
       for (const [identity, analysis] of this.analysers) {
-        analysis.analyser.getByteFrequencyData(analysis.dataArray);
+        // Time-domain waveform: each sample is -1.0 to 1.0
+        analysis.analyser.getFloatTimeDomainData(analysis.dataArray);
 
-        // Compute average energy across frequency bins
-        let sum = 0;
+        // Compute RMS energy — same basis as the noise gate
+        let sumSq = 0;
         for (let i = 0; i < analysis.dataArray.length; i++) {
-          sum += analysis.dataArray[i];
+          sumSq += analysis.dataArray[i] * analysis.dataArray[i];
         }
-        const avg = sum / analysis.dataArray.length;
-        const loud = avg > SPEAKING_THRESHOLD;
+        const rms = Math.sqrt(sumSq / analysis.dataArray.length);
+        const loud = rms > RMS_THRESHOLD;
 
         if (loud) {
           this.lastSpokeAt.set(identity, now);
