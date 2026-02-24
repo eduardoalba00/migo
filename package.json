@@ -15,7 +15,9 @@
     "db:generate": "pnpm --filter @migo/server db:generate",
     "db:migrate": "pnpm --filter @migo/server db:migrate",
     "ship": "git checkout main && git merge dev && git push origin main && git checkout dev",
-    "prod:db": "node scripts/prod-db.mjs"
+    "prod:db": "node scripts/prod-db.mjs",
+    "db:dump": "node scripts/prod-db-transfer.mjs dump",
+    "db:restore": "node scripts/prod-db-transfer.mjs restore"
   },
   "devDependencies": {
     "@types/node": "^25.2.3",

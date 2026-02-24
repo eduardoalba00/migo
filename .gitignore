@@ -12,3 +12,4 @@ build
 *uploads/
 .livekit/
 *settings.local.json
+migo-backup.sql
