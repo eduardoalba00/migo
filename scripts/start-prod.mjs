@@ -11,7 +11,7 @@ const PID_FILE = join(root, ".livekit", "livekit.pid");
 
 // Load .env.prod into process.env
 if (!existsSync(ENV_FILE)) {
-  console.error("Missing .env.prod — run `pnpm prod:setup` first.");
+  console.error("Missing .env.prod — run `node scripts/setup.mjs` first.");
   process.exit(1);
 }
 
@@ -61,5 +61,12 @@ livekit.unref();
 mkdirSync(join(root, ".livekit"), { recursive: true });
 writeFileSync(PID_FILE, String(livekit.pid));
 
-console.log("\nMigo backend is up and running!");
-console.log("  Stop with: pnpm prod:stop");
+console.log("\nMigo backend is up and running!\n");
+if (process.env.DOMAIN) {
+  console.log(`  Desktop app: https://${process.env.DOMAIN}:8443`);
+  console.log(`  Web client:  https://${process.env.DOMAIN}:8443`);
+} else {
+  const host = (process.env.LIVEKIT_URL || "").replace(/^wss?:\/\//, "").replace(/:\d+$/, "") || "<your-ip>";
+  console.log(`  Server URL:  http://${host}:8080`);
+}
+console.log(`  Stop with:   node scripts/stop-prod.mjs`);
