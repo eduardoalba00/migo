@@ -123,10 +123,10 @@ export class ScreenShareAudioPipeline {
 
   async start(room: Room, sourceId: string, sourceType: "window" | "screen"): Promise<void> {
     try {
-      const available = await window.audioCaptureAPI.isAvailable();
+      const available = await window.audioCaptureAPI?.isAvailable();
       if (!available) return;
 
-      const started = await window.audioCaptureAPI.start(sourceId, sourceType);
+      const started = await window.audioCaptureAPI!.start(sourceId, sourceType);
       if (!started) return;
 
       // Create AudioContext → AudioWorklet → MediaStreamDestination pipeline
@@ -161,7 +161,7 @@ export class ScreenShareAudioPipeline {
       this.screenAudioWorklet.connect(destination);
 
       // Forward WASAPI PCM buffers to the worklet
-      const removeListener = window.audioCaptureAPI.onData((buffer) => {
+      const removeListener = window.audioCaptureAPI!.onData((buffer) => {
         this.screenAudioWorklet?.port.postMessage(buffer, [buffer.buffer]);
       });
       this.screenAudioCleanup = removeListener;
@@ -189,7 +189,7 @@ export class ScreenShareAudioPipeline {
 
     // Stop WASAPI capture
     try {
-      await window.audioCaptureAPI.stop();
+      await window.audioCaptureAPI?.stop();
     } catch {}
 
     // Unpublish screen share audio track from LiveKit

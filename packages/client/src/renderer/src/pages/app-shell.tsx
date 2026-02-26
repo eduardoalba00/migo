@@ -47,9 +47,9 @@ export function AppShell() {
     }
   }, []);
 
-  // Listen for clip shortcut (Ctrl+Shift+C) while screen sharing
+  // Listen for clip shortcut (Ctrl+Shift+C) while screen sharing (Electron only)
   useEffect(() => {
-    if (!isScreenSharing) return;
+    if (!isScreenSharing || !window.screenAPI) return;
     const removeListener = window.screenAPI.onClipTriggered(() => {
       clipScreenShare();
     });

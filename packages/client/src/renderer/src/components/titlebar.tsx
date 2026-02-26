@@ -7,9 +7,10 @@ export function Titlebar() {
   const { theme, setTheme } = useTheme();
 
   useEffect(() => {
-    if (!window.windowAPI) return;
-    window.windowAPI.isMaximized().then(setIsMaximized);
-    return window.windowAPI.onMaximizedChange(setIsMaximized);
+    const api = window.windowAPI;
+    if (!api) return;
+    api.isMaximized().then(setIsMaximized);
+    return api.onMaximizedChange(setIsMaximized);
   }, []);
 
   return (

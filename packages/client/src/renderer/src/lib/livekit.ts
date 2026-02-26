@@ -257,13 +257,19 @@ export class LiveKitManager {
   ): Promise<void> {
     if (!this.room) return;
 
+    // On Electron, audio is captured separately via WASAPI native addon,
+    // so we disable getDisplayMedia audio. On web, we request audio from
+    // getDisplayMedia so the browser captures tab/system audio.
+    const useNativeAudio = !!sourceId && !!sourceType;
+
     // Use LiveKit SDK's setScreenShareEnabled which calls getDisplayMedia()
-    // internally. Electron's setDisplayMediaRequestHandler provides the source.
+    // internally. On Electron, setDisplayMediaRequestHandler provides the
+    // pre-selected source. On web, the browser shows its native picker.
     // This uses Chrome's full WebRTC pipeline (FEC, congestion control, NACK).
     await this.room.localParticipant.setScreenShareEnabled(
       true,
       {
-        audio: false,
+        audio: !useNativeAudio,
         contentHint: "motion",
         resolution: { width: 3440, height: 1440, frameRate: 60 },
       },
@@ -277,8 +283,8 @@ export class LiveKitManager {
       },
     );
 
-    // Start WASAPI process audio capture if available
-    if (sourceId && sourceType) {
+    // Start WASAPI process audio capture if available (Electron only)
+    if (useNativeAudio) {
       await this.screenAudio.start(this.room, sourceId, sourceType);
     }
 

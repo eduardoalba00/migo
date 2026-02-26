@@ -10,9 +10,10 @@ export function ScreenSharePicker() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!showPicker) return;
+    const api = window.screenAPI;
+    if (!showPicker || !api) return;
     setLoading(true);
-    window.screenAPI
+    api
       .getSources()
       .then((s) => setSources(s))
       .catch(() => setSources(null))

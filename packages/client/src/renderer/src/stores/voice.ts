@@ -216,8 +216,8 @@ export const useVoiceStore = create<VoiceStoreState>()((set, get) => ({
       window.overlayBridgeAPI?.destroy().catch(() => {});
     }
 
-    // Stop browser screen share if active + unregister clip shortcut
-    window.screenAPI.unregisterClipShortcut().catch(() => {});
+    // Stop browser screen share if active + unregister clip shortcut (Electron only)
+    window.screenAPI?.unregisterClipShortcut().catch(() => {});
     livekitManager.stopScreenShare().catch(() => {});
 
     livekitManager.disconnect();

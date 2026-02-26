@@ -10,9 +10,10 @@ export function UpdateNotification() {
   const [dismissed, setDismissed] = useState(false);
 
   useEffect(() => {
-    if (!window.updaterAPI) return;
+    const api = window.updaterAPI;
+    if (!api) return;
 
-    const cleanupStatus = window.updaterAPI.onStatus((data) => {
+    const cleanupStatus = api.onStatus((data) => {
       if (data.status === "available") {
         setVersion(data.version);
         setPhase("downloading");
@@ -25,7 +26,7 @@ export function UpdateNotification() {
       }
     });
 
-    const cleanupProgress = window.updaterAPI.onProgress((data) => {
+    const cleanupProgress = api.onProgress((data) => {
       setPercent(Math.round(data.percent));
     });
 
@@ -65,7 +66,7 @@ export function UpdateNotification() {
       </div>
       {phase === "ready" && (
         <button
-          onClick={() => window.updaterAPI.install()}
+          onClick={() => window.updaterAPI?.install()}
           className="shrink-0 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
         >
           Restart

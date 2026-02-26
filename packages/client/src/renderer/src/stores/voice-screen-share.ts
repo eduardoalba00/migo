@@ -1,6 +1,7 @@
 import { nanoid } from "nanoid";
 import { livekitManager } from "@/lib/livekit";
 import { voiceSignal } from "@/lib/voice-signal";
+import { isElectron } from "@/lib/platform";
 import {
   playScreenShareStartSound,
   playScreenShareStopSound,
@@ -34,14 +35,14 @@ export function createScreenShareActions(set: Set, get: Get) {
         annotationStore.sendEvent({ type: "sessionEnd" });
         annotationStore.endSession();
         try {
-          await window.overlayBridgeAPI.destroy();
+          await window.overlayBridgeAPI?.destroy();
         } catch {}
         set({ isSessionMode: false });
       } else {
         const sessionId = nanoid();
 
-        // Create overlay window on the shared display (best-effort)
-        if (screenShareSourceId) {
+        // Create overlay window on the shared display (Electron only, best-effort)
+        if (screenShareSourceId && window.screenAPI && window.overlayBridgeAPI) {
           try {
             const displayIndex =
               await window.screenAPI.getDisplayIndex(screenShareSourceId);
@@ -65,8 +66,12 @@ export function createScreenShareActions(set: Set, get: Get) {
 
       if (isScreenSharing) {
         get().stopScreenShare();
-      } else {
+      } else if (isElectron) {
+        // Electron: show custom source picker
         set({ showScreenSharePicker: true });
+      } else {
+        // Web: use browser's native getDisplayMedia picker directly
+        get().startScreenShare({ type: "display", id: 0 });
       }
     },
 
@@ -74,27 +79,27 @@ export function createScreenShareActions(set: Set, get: Get) {
       set({ showScreenSharePicker: false });
 
       try {
-        // Pre-select the source in the main process so that when
-        // getDisplayMedia() is called, the handler provides the right source.
-        // Returns the desktopCapturer source ID (e.g. "window:12345:0") or null.
-        const sourceId = await window.screenAPI.selectSource(
-          target.type,
-          target.id,
-        );
-        if (!sourceId) throw new Error("No source selected");
-
-        // Map picker type to audio capture source type
-        const sourceType: "window" | "screen" =
+        let sourceId: string | null = null;
+        let sourceType: "window" | "screen" =
           target.type === "window" ? "window" : "screen";
 
-        // Use LiveKit SDK's setScreenShareEnabled which calls getDisplayMedia()
-        // internally. Chrome's full WebRTC pipeline handles encoding, FEC,
-        // congestion control, and NACK (tested at 55fps 1440p).
-        // Also starts WASAPI process audio capture if available.
-        await livekitManager.startScreenShare(sourceId, sourceType);
+        if (isElectron && window.screenAPI) {
+          // Electron: Pre-select the source in the main process so that when
+          // getDisplayMedia() is called, the handler provides the right source.
+          sourceId = await window.screenAPI.selectSource(
+            target.type,
+            target.id,
+          );
+          if (!sourceId) throw new Error("No source selected");
+        }
 
-        // Register clip shortcut (Ctrl+Shift+C)
-        window.screenAPI.registerClipShortcut().catch(() => {});
+        // Use LiveKit SDK's setScreenShareEnabled which calls getDisplayMedia()
+        // internally. On Electron, the handler provides the pre-selected source.
+        // On web, the browser shows its native picker.
+        await livekitManager.startScreenShare(sourceId ?? undefined, sourceType);
+
+        // Register clip shortcut (Ctrl+Shift+C) — Electron only
+        window.screenAPI?.registerClipShortcut().catch(() => {});
 
         // Notify server so other clients see the screen share icon
         voiceSignal("startScreenShare", {}).catch(() => {});
@@ -215,9 +220,9 @@ export function createScreenShareActions(set: Set, get: Get) {
 
         console.log("[clip] Clip uploaded and sent successfully");
 
-        // Play clip success sound + show desktop overlay
+        // Play clip success sound + show desktop overlay (Electron only)
         playClipSound();
-        window.screenAPI.showClipNotification().catch(() => {});
+        window.screenAPI?.showClipNotification().catch(() => {});
       } catch (err) {
         console.error("[clip] Failed to clip screen share:", err);
       }
@@ -233,8 +238,8 @@ export function createScreenShareActions(set: Set, get: Get) {
         window.overlayBridgeAPI?.destroy().catch(() => {});
       }
 
-      // Unregister clip shortcut
-      window.screenAPI.unregisterClipShortcut().catch(() => {});
+      // Unregister clip shortcut (Electron only)
+      window.screenAPI?.unregisterClipShortcut().catch(() => {});
 
       livekitManager.stopScreenShare().catch(() => {});
 

@@ -4,6 +4,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { Titlebar } from "@/components/titlebar";
 import { UpdateNotification } from "@/components/layout/update-notification";
 import { VersionMismatchBanner } from "@/components/layout/version-mismatch-banner";
+import { isElectron } from "@/lib/platform";
 import { AuthPage } from "@/pages/auth";
 import { AppShell } from "@/pages/app-shell";
 import { WorkspacePicker } from "@/pages/workspace-picker";
@@ -41,8 +42,8 @@ export default function App() {
   return (
     <ThemeProvider attribute="class" defaultTheme="dark" storageKey="migo-theme">
       <div className="flex flex-col h-screen">
-        <Titlebar />
-        <UpdateNotification />
+        {isElectron && <Titlebar />}
+        {isElectron && <UpdateNotification />}
         <VersionMismatchBanner />
         {!activeWorkspaceId ? (
           <WorkspacePicker />

@@ -76,11 +76,11 @@ declare global {
   }
 
   interface Window {
-    windowAPI: WindowAPI;
-    screenAPI: ScreenAPI;
-    updaterAPI: UpdaterAPI;
-    audioCaptureAPI: AudioCaptureAPI;
-    overlayBridgeAPI: OverlayBridgeAPI;
-    overlayAPI: OverlayAPI;
+    windowAPI?: WindowAPI;
+    screenAPI?: ScreenAPI;
+    updaterAPI?: UpdaterAPI;
+    audioCaptureAPI?: AudioCaptureAPI;
+    overlayBridgeAPI?: OverlayBridgeAPI;
+    overlayAPI?: OverlayAPI;
   }
 }

@@ -7,14 +7,15 @@ export function VersionMismatchBanner() {
   const [updating, setUpdating] = useState(false);
 
   useEffect(() => {
-    if (!versionMismatch || !window.updaterAPI) return;
+    const api = window.updaterAPI;
+    if (!versionMismatch || !api) return;
 
     setUpdating(true);
-    window.updaterAPI.check().catch(() => setUpdating(false));
+    api.check().catch(() => setUpdating(false));
 
-    const cleanup = window.updaterAPI.onStatus((data) => {
+    const cleanup = api.onStatus((data) => {
       if (data.status === "downloaded") {
-        window.updaterAPI.install();
+        api.install();
       }
       if (data.status === "not-available" || data.status === "error") {
         setUpdating(false);
@@ -39,6 +40,14 @@ export function VersionMismatchBanner() {
           <span>
             Your client is outdated. Please update Migo to continue.
           </span>
+          {!window.updaterAPI && (
+            <button
+              onClick={() => window.location.reload()}
+              className="shrink-0 rounded-md bg-white/20 px-3 py-1 text-xs font-medium hover:bg-white/30 transition-colors"
+            >
+              Reload
+            </button>
+          )}
         </>
       )}
     </div>
