@@ -14,6 +14,7 @@ interface TimedChunk {
 
 export class ReplayBuffer {
   private recorder: MediaRecorder | null = null;
+  private headerChunk: Blob | null = null;
   private chunks: TimedChunk[] = [];
   private stream: MediaStream;
   private flushResolve: ((blob: Blob) => void) | null = null;
@@ -24,6 +25,7 @@ export class ReplayBuffer {
 
   start(): void {
     if (this.recorder) return;
+    this.headerChunk = null;
     this.chunks = [];
     this.createRecorder();
   }
@@ -43,20 +45,30 @@ export class ReplayBuffer {
 
     this.recorder.ondataavailable = (event) => {
       if (event.data.size > 0) {
-        this.chunks.push({ blob: event.data, timestamp: Date.now() });
-        this.pruneOldChunks();
+        if (!this.headerChunk) {
+          // First chunk contains the WebM initialization segment (EBML header,
+          // Segment Info, Tracks). Store it separately so it never gets pruned.
+          this.headerChunk = event.data;
+        } else {
+          this.chunks.push({ blob: event.data, timestamp: Date.now() });
+          this.pruneOldChunks();
+        }
       }
     };
 
     this.recorder.onstop = () => {
       // If a flush was requested, resolve the promise with the buffered data
       if (this.flushResolve) {
-        const blob = new Blob(
-          this.chunks.map((c) => c.blob),
-          { type: this.recorder?.mimeType ?? "video/webm" },
-        );
+        const blobs: Blob[] = [];
+        if (this.headerChunk) blobs.push(this.headerChunk);
+        for (const c of this.chunks) blobs.push(c.blob);
+
+        const blob = new Blob(blobs, {
+          type: this.recorder?.mimeType ?? "video/webm",
+        });
         this.flushResolve(blob);
         this.flushResolve = null;
+        this.headerChunk = null;
         this.chunks = [];
 
         // Restart recording for future clips
@@ -69,8 +81,7 @@ export class ReplayBuffer {
 
   private pruneOldChunks(): void {
     const cutoff = Date.now() - BUFFER_DURATION_MS;
-    // Keep at least the first chunk (contains WebM header) and all recent chunks
-    while (this.chunks.length > 1 && this.chunks[1].timestamp < cutoff) {
+    while (this.chunks.length > 0 && this.chunks[0].timestamp < cutoff) {
       this.chunks.shift();
     }
   }
@@ -102,6 +113,7 @@ export class ReplayBuffer {
       }
       this.recorder = null;
     }
+    this.headerChunk = null;
     this.chunks = [];
     this.flushResolve = null;
   }
