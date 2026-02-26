@@ -6,7 +6,14 @@ import { registerScreenCaptureIPC } from "./ipc/screen-capture";
 import { registerAudioCaptureIPC } from "./ipc/audio-capture";
 import { registerOverlayIPC } from "./ipc/overlay";
 import { registerWindowControlsIPC } from "./ipc/window-controls";
-import { setupAutoUpdater } from "./auto-updater";
+import { checkForUpdatesSplash, setupRuntimeUpdater } from "./auto-updater";
+import {
+  createSplashWindow,
+  splashSetStatus,
+  splashSetProgress,
+  splashSetVersion,
+  splashHideProgress,
+} from "./splash-window";
 
 // GPU acceleration for video decode
 app.commandLine.appendSwitch("enable-gpu-rasterization");
@@ -56,20 +63,48 @@ function createWindow(): BrowserWindow {
   return mainWindow;
 }
 
-app.whenReady().then(() => {
+function launchMainWindow(): void {
   const mainWindow = createWindow();
-  setupAutoUpdater(mainWindow);
+  if (!is.dev) {
+    setupRuntimeUpdater(mainWindow);
+  }
+}
+
+app.whenReady().then(async () => {
+  if (is.dev) {
+    // Dev mode: skip splash, open main window immediately
+    launchMainWindow();
+  } else {
+    // Production: show splash, check for updates before opening main window
+    const splash = createSplashWindow();
+
+    splash.webContents.on("did-finish-load", () => {
+      splashSetVersion(splash, app.getVersion());
+    });
+
+    const result = await checkForUpdatesSplash(
+      (text) => splashSetStatus(splash, text),
+      (percent) => splashSetProgress(splash, percent),
+    );
+
+    if (result === "no-update") {
+      splashSetStatus(splash, "Launching...");
+      splashHideProgress(splash);
+      await new Promise((r) => setTimeout(r, 500));
+      if (!splash.isDestroyed()) splash.close();
+      launchMainWindow();
+    }
+    // "installing" — quitAndInstall handles the restart
+  }
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
-      const win = createWindow();
-      setupAutoUpdater(win);
+      launchMainWindow();
     }
   });
 });
 
 app.on("before-quit", () => {
-  // Destroy the overlay window so it doesn't keep the app alive
   destroyOverlayWindow();
 });
 
