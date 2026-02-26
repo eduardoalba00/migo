@@ -1,5 +1,16 @@
 import { useState, useEffect } from "react";
-import { ChevronDown, ChevronRight, Hash, Volume2, Plus, LogOut, Link, Settings, Trash2 } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronRight,
+  Hash,
+  Volume2,
+  Plus,
+  LogOut,
+  Link,
+  Settings,
+  Trash2,
+  Film,
+} from "lucide-react";
 import { useServerStore } from "@/stores/servers";
 import { useChannelStore } from "@/stores/channels";
 import { useVoiceStore } from "@/stores/voice";
@@ -45,7 +56,9 @@ export function ChannelSidebar({ serverId }: ChannelSidebarProps) {
   const [showInvite, setShowInvite] = useState(false);
   const [showUserSettings, setShowUserSettings] = useState(false);
   const [showServerSettings, setShowServerSettings] = useState(false);
-  const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
+  const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(
+    new Set(),
+  );
 
   const server = servers.find((s) => s.id === serverId);
   const isOwner = server?.ownerId === user?.id;
@@ -118,6 +131,8 @@ export function ChannelSidebar({ serverId }: ChannelSidebarProps) {
         >
           {isVoice ? (
             <Volume2 className="h-4 w-4 shrink-0 opacity-50" />
+          ) : channel.isSystem ? (
+            <Film className="h-4 w-4 shrink-0 opacity-50" />
           ) : (
             <Hash className="h-4 w-4 shrink-0 opacity-50" />
           )}
@@ -137,7 +152,11 @@ export function ChannelSidebar({ serverId }: ChannelSidebarProps) {
     );
   };
 
-  const CategorySection = ({ category }: { category: CategoryWithChannels }) => {
+  const CategorySection = ({
+    category,
+  }: {
+    category: CategoryWithChannels;
+  }) => {
     const isCollapsed = collapsedCategories.has(category.id);
     return (
       <div className="mt-4">
@@ -240,14 +259,20 @@ export function ChannelSidebar({ serverId }: ChannelSidebarProps) {
         <div className="flex items-center gap-2 px-3 py-2 border-t border-border bg-card">
           <div className="w-8 h-8 rounded-full bg-sidebar-primary text-sidebar-primary-foreground flex items-center justify-center text-xs font-semibold">
             {user?.avatarUrl ? (
-              <img src={resolveUploadUrl(user.avatarUrl)!} className="w-8 h-8 rounded-full object-cover" alt="" />
+              <img
+                src={resolveUploadUrl(user.avatarUrl)!}
+                className="w-8 h-8 rounded-full object-cover"
+                alt=""
+              />
             ) : (
               user?.displayName?.charAt(0).toUpperCase() || "?"
             )}
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium truncate">{user?.displayName}</p>
-            <p className="text-xs text-muted-foreground truncate">{user?.username}</p>
+            <p className="text-xs text-muted-foreground truncate">
+              {user?.username}
+            </p>
           </div>
           <button
             onClick={() => setShowUserSettings(true)}

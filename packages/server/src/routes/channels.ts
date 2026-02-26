@@ -182,6 +182,7 @@ export function channelRoutes(
           type: channel.type,
           topic: channel.topic,
           position: channel.position,
+          isSystem: channel.isSystem,
         };
 
         pubsub.publish(`server:${serverId}`, {
@@ -231,6 +232,7 @@ export function channelRoutes(
             type: ch.type,
             topic: ch.topic,
             position: ch.position,
+            isSystem: ch.isSystem,
           }));
 
         const categoriesWithChannels = allCategories.map((cat) => ({
@@ -248,6 +250,7 @@ export function channelRoutes(
               type: ch.type,
               topic: ch.topic,
               position: ch.position,
+              isSystem: ch.isSystem,
             })),
         }));
 
@@ -324,6 +327,7 @@ export function channelRoutes(
           type: channel.type,
           topic: channel.topic,
           position: channel.position,
+          isSystem: channel.isSystem,
         };
 
         pubsub.publish(`server:${serverId}`, {
