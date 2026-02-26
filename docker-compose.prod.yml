@@ -30,6 +30,7 @@ services:
       JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET}
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
       LIVEKIT_URL: ${LIVEKIT_URL}
+      LIVEKIT_INTERNAL_URL: ${LIVEKIT_INTERNAL_URL:-}
       LIVEKIT_API_KEY: ${LIVEKIT_API_KEY}
       LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET}
       UPLOAD_DIR: /data/uploads
@@ -55,6 +56,27 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
 
+  caddy:
+    profiles: ["https"]
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "8443:8443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    environment:
+      DOMAIN: ${DOMAIN}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      server:
+        condition: service_healthy
+
 volumes:
   pgdata:
   uploads:
+  caddy_data:
+  caddy_config:

@@ -27,9 +27,16 @@ for (const line of envLines) {
 }
 
 // Start Docker services
-console.log("Starting Docker services (Postgres, Migo server, Watchtower)...");
+const composeArgs = ["compose", "-f", COMPOSE_FILE, "--env-file", ENV_FILE];
+if (process.env.DOMAIN) {
+  composeArgs.push("--profile", "https");
+  console.log(`Starting Docker services with HTTPS (domain: ${process.env.DOMAIN})...`);
+} else {
+  console.log("Starting Docker services (Postgres, Migo server, Watchtower)...");
+}
+composeArgs.push("up", "-d");
 try {
-  execFileSync("docker", ["compose", "-f", COMPOSE_FILE, "--env-file", ENV_FILE, "up", "-d"], {
+  execFileSync("docker", composeArgs, {
     stdio: "inherit",
     cwd: root,
   });

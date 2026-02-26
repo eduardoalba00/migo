@@ -9,6 +9,7 @@ export interface Config {
   accessTokenExpiry: string;
   refreshTokenExpiry: string;
   livekitUrl: string;
+  livekitInternalUrl: string;
   livekitApiKey: string;
   livekitApiSecret: string;
   uploadDir: string;
@@ -35,6 +36,7 @@ export function loadConfig(): Config {
     accessTokenExpiry: process.env.ACCESS_TOKEN_EXPIRY || "15m",
     refreshTokenExpiry: process.env.REFRESH_TOKEN_EXPIRY || "7d",
     livekitUrl: process.env.LIVEKIT_URL || "",
+    livekitInternalUrl: process.env.LIVEKIT_INTERNAL_URL || "",
     livekitApiKey: process.env.LIVEKIT_API_KEY || "",
     livekitApiSecret: process.env.LIVEKIT_API_SECRET || "",
     uploadDir: process.env.UPLOAD_DIR || "./uploads",

@@ -7,8 +7,8 @@ export class LiveKitService {
 
   constructor(config: Config) {
     this.config = config;
-    // RoomServiceClient uses HTTP API (port 7880 for both WS and HTTP on LiveKit dev server)
-    const httpUrl = config.livekitUrl.replace(/^ws/, "http");
+    // RoomServiceClient uses HTTP API — prefer internal URL to avoid going through reverse proxy
+    const httpUrl = (config.livekitInternalUrl || config.livekitUrl).replace(/^ws/, "http");
     this.roomService = new RoomServiceClient(httpUrl, config.livekitApiKey, config.livekitApiSecret);
   }
 

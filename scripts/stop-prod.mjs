@@ -9,6 +9,20 @@ const ENV_FILE = join(root, ".env.prod");
 const COMPOSE_FILE = join(root, "docker-compose.prod.yml");
 const PID_FILE = join(root, ".livekit", "livekit.pid");
 
+// Load .env.prod to check for DOMAIN
+if (existsSync(ENV_FILE)) {
+  const envLines = readFileSync(ENV_FILE, "utf-8").split("\n");
+  for (const line of envLines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const eq = trimmed.indexOf("=");
+    if (eq === -1) continue;
+    const key = trimmed.slice(0, eq);
+    const value = trimmed.slice(eq + 1);
+    process.env[key] = value;
+  }
+}
+
 console.log("Stopping Migo backend...\n");
 
 // Kill LiveKit process
@@ -30,9 +44,14 @@ if (existsSync(PID_FILE)) {
 }
 
 // Stop Docker services
+const composeArgs = ["compose", "-f", COMPOSE_FILE, "--env-file", ENV_FILE];
+if (process.env.DOMAIN) {
+  composeArgs.push("--profile", "https");
+}
+composeArgs.push("down");
 console.log("Stopping Docker services...");
 try {
-  execFileSync("docker", ["compose", "-f", COMPOSE_FILE, "--env-file", ENV_FILE, "down"], {
+  execFileSync("docker", composeArgs, {
     stdio: "inherit",
     cwd: root,
   });

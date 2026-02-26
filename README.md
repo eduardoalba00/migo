@@ -61,7 +61,7 @@ cd migo
 node scripts/setup.mjs
 ```
 
-The setup script detects your public IP, generates secrets, writes `.env.prod`, and starts all services (Postgres, Migo server, Watchtower, LiveKit).
+The setup script detects your public IP, generates secrets, writes `.env.prod`, and starts all services (Postgres, Migo server, Watchtower, LiveKit). If you have a domain name, the script can enable HTTPS via Caddy reverse proxy — required for web client access.
 
 ```bash
 node scripts/start-prod.mjs   # Start services
@@ -76,9 +76,15 @@ Open these ports on your server (port forwarding):
 | ----------- | -------- | -------------------------------------------------- |
 | 443         | UDP      | TURN relay (screen share through restrictive NATs) |
 | 8080        | TCP      | Migo API + WebSocket                               |
-| 7880        | TCP      | LiveKit signaling                                  |
 | 7881        | TCP      | LiveKit WebRTC TCP fallback                        |
 | 50000–60000 | UDP      | LiveKit WebRTC media                               |
+
+**HTTPS mode** (if you configured a domain during setup):
+
+| Port | Protocol | Purpose                                    |
+| ---- | -------- | ------------------------------------------ |
+| 80   | TCP      | Let's Encrypt ACME challenge + HTTP redirect |
+| 8443 | TCP      | HTTPS reverse proxy (Caddy)                |
 
 <details>
 <summary>Open ports manually on Linux (UFW)</summary>
@@ -88,9 +94,13 @@ If your firewall wasn't configured by the install script, you can open the requi
 ```bash
 sudo ufw allow 443/udp
 sudo ufw allow 8080/tcp
-sudo ufw allow 7880/tcp
 sudo ufw allow 7881/tcp
 sudo ufw allow 50000:60000/udp
+
+# HTTPS mode only
+sudo ufw allow 80/tcp
+sudo ufw allow 8443/tcp
+
 sudo ufw enable
 ```
 
@@ -98,7 +108,10 @@ sudo ufw enable
 
 ### Connect
 
-Open Migo → **Add Workspace** → enter `http://<your-server-ip>:8080`.
+Open Migo → **Add Workspace** → enter your server URL:
+
+- **Desktop client:** `http://<your-server-ip>:8080`
+- **Web client** (HTTPS mode): `https://<your-domain>:8443`
 
 Watchtower checks for new server images every 5 minutes and automatically restarts the container when an update is available.
 

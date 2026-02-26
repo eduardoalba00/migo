@@ -1,0 +1,20 @@
+{
+    http_port 80
+    https_port 8443
+}
+
+{$DOMAIN}:8443 {
+    handle /rtc/* {
+        reverse_proxy host.docker.internal:7880
+    }
+    handle /twirp/* {
+        reverse_proxy host.docker.internal:7880
+    }
+    handle {
+        reverse_proxy server:8080
+    }
+}
+
+http://{$DOMAIN}:80 {
+    redir https://{host}:8443{uri} permanent
+}
