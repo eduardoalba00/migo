@@ -61,6 +61,7 @@ export interface VoiceStoreState {
   toggleScreenShare: () => void;
   startScreenShare: (target: { type: string; id: number }) => Promise<void>;
   stopScreenShare: () => void;
+  clipScreenShare: () => Promise<void>;
   handleScreenShareStart: (data: { userId: string; channelId: string }) => void;
   handleScreenShareStop: (data: { userId: string }) => void;
   focusScreenShare: (userId: string) => void;
@@ -215,7 +216,8 @@ export const useVoiceStore = create<VoiceStoreState>()((set, get) => ({
       window.overlayBridgeAPI?.destroy().catch(() => {});
     }
 
-    // Stop browser screen share if active
+    // Stop browser screen share if active + unregister clip shortcut
+    window.screenAPI.unregisterClipShortcut().catch(() => {});
     livekitManager.stopScreenShare().catch(() => {});
 
     livekitManager.disconnect();
@@ -347,7 +349,12 @@ export const useVoiceStore = create<VoiceStoreState>()((set, get) => ({
     const { currentChannelId, isConnecting, channelUsers } = get();
     const selfId = useAuthStore.getState().user?.id;
 
-    if (selfId && currentChannelId && !isConnecting && state.userId !== selfId) {
+    if (
+      selfId &&
+      currentChannelId &&
+      !isConnecting &&
+      state.userId !== selfId
+    ) {
       const wasInOurChannel = !!channelUsers[currentChannelId]?.[state.userId];
 
       if (state.channelId === currentChannelId && !wasInOurChannel) {
@@ -515,7 +522,9 @@ export const useVoiceStore = create<VoiceStoreState>()((set, get) => ({
         joinedStreams: joined,
         screenShareTracks,
         focusedScreenShareUserId:
-          s.focusedScreenShareUserId === userId ? null : s.focusedScreenShareUserId,
+          s.focusedScreenShareUserId === userId
+            ? null
+            : s.focusedScreenShareUserId,
       };
     });
   },

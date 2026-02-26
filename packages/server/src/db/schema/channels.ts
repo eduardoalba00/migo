@@ -1,4 +1,4 @@
-import { pgTable, text, integer } from "drizzle-orm/pg-core";
+import { pgTable, text, integer, boolean } from "drizzle-orm/pg-core";
 import { servers } from "./servers.js";
 
 export const categories = pgTable("categories", {
@@ -19,7 +19,10 @@ export const channels = pgTable("channels", {
     onDelete: "set null",
   }),
   name: text("name").notNull(),
-  type: text("type", { enum: ["text", "voice"] }).notNull().default("text"),
+  type: text("type", { enum: ["text", "voice"] })
+    .notNull()
+    .default("text"),
   topic: text("topic"),
   position: integer("position").notNull().default(0),
+  isSystem: boolean("is_system").notNull().default(false),
 });

@@ -17,6 +17,8 @@ export function AppShell() {
   const fetchChannels = useChannelStore((s) => s.fetchChannels);
   const fetchMembers = useMemberStore((s) => s.fetchMembers);
   const reannounceVoiceState = useVoiceStore((s) => s.reannounceVoiceState);
+  const isScreenSharing = useVoiceStore((s) => s.isScreenSharing);
+  const clipScreenShare = useVoiceStore((s) => s.clipScreenShare);
 
   useEffect(() => {
     if (connected) {
@@ -29,7 +31,14 @@ export function AppShell() {
       }
       reannounceVoiceState();
     }
-  }, [connected, fetchServers, activeServerId, fetchChannels, fetchMembers, reannounceVoiceState]);
+  }, [
+    connected,
+    fetchServers,
+    activeServerId,
+    fetchChannels,
+    fetchMembers,
+    reannounceVoiceState,
+  ]);
 
   useEffect(() => {
     // Request notification permission
@@ -37,6 +46,15 @@ export function AppShell() {
       Notification.requestPermission().catch(() => {});
     }
   }, []);
+
+  // Listen for clip shortcut (Ctrl+Shift+C) while screen sharing
+  useEffect(() => {
+    if (!isScreenSharing) return;
+    const removeListener = window.screenAPI.onClipTriggered(() => {
+      clipScreenShare();
+    });
+    return removeListener;
+  }, [isScreenSharing, clipScreenShare]);
 
   // Keep the latest token in a ref so the WS connect effect doesn't re-run on
   // every token refresh (which would needlessly disconnect/reconnect the WS).

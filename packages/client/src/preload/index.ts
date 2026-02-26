@@ -6,7 +6,8 @@ const windowAPI = {
   close: () => ipcRenderer.send("window:close"),
   isMaximized: () => ipcRenderer.invoke("window:isMaximized"),
   onMaximizedChange: (callback: (maximized: boolean) => void) => {
-    const handler = (_event: Electron.IpcRendererEvent, maximized: boolean) => callback(maximized);
+    const handler = (_event: Electron.IpcRendererEvent, maximized: boolean) =>
+      callback(maximized);
     ipcRenderer.on("window:maximized-change", handler);
     return () => ipcRenderer.removeListener("window:maximized-change", handler);
   },
@@ -17,21 +18,38 @@ contextBridge.exposeInMainWorld("windowAPI", windowAPI);
 const screenAPI = {
   getSources: () => ipcRenderer.invoke("screen:getSources"),
   selectSource: (targetType?: string, targetId?: number) =>
-    ipcRenderer.invoke("screen:selectSource", targetType, targetId) as Promise<string | null>,
+    ipcRenderer.invoke("screen:selectSource", targetType, targetId) as Promise<
+      string | null
+    >,
   getDisplayIndex: (sourceId: string) =>
     ipcRenderer.invoke("screen:getDisplayIndex", sourceId) as Promise<number>,
+  registerClipShortcut: () =>
+    ipcRenderer.invoke("screen:registerClipShortcut") as Promise<
+      boolean | undefined
+    >,
+  unregisterClipShortcut: () =>
+    ipcRenderer.invoke("screen:unregisterClipShortcut") as Promise<void>,
+  onClipTriggered: (callback: () => void) => {
+    const handler = () => callback();
+    ipcRenderer.on("screen:clip-triggered", handler);
+    return () => ipcRenderer.removeListener("screen:clip-triggered", handler);
+  },
+  showClipNotification: () =>
+    ipcRenderer.invoke("screen:showClipNotification") as Promise<void>,
 };
 
 contextBridge.exposeInMainWorld("screenAPI", screenAPI);
 
 const updaterAPI = {
   onStatus: (callback: (data: unknown) => void) => {
-    const handler = (_event: Electron.IpcRendererEvent, data: unknown) => callback(data);
+    const handler = (_event: Electron.IpcRendererEvent, data: unknown) =>
+      callback(data);
     ipcRenderer.on("updater:status", handler);
     return () => ipcRenderer.removeListener("updater:status", handler);
   },
   onProgress: (callback: (data: unknown) => void) => {
-    const handler = (_event: Electron.IpcRendererEvent, data: unknown) => callback(data);
+    const handler = (_event: Electron.IpcRendererEvent, data: unknown) =>
+      callback(data);
     ipcRenderer.on("updater:progress", handler);
     return () => ipcRenderer.removeListener("updater:progress", handler);
   },
@@ -43,9 +61,14 @@ const updaterAPI = {
 contextBridge.exposeInMainWorld("updaterAPI", updaterAPI);
 
 const audioCaptureAPI = {
-  isAvailable: () => ipcRenderer.invoke("audio-capture:isAvailable") as Promise<boolean>,
+  isAvailable: () =>
+    ipcRenderer.invoke("audio-capture:isAvailable") as Promise<boolean>,
   start: (sourceId: string, sourceType: "window" | "screen") =>
-    ipcRenderer.invoke("audio-capture:start", sourceId, sourceType) as Promise<boolean>,
+    ipcRenderer.invoke(
+      "audio-capture:start",
+      sourceId,
+      sourceType,
+    ) as Promise<boolean>,
   stop: () => ipcRenderer.invoke("audio-capture:stop") as Promise<void>,
   onData: (callback: (buffer: Float32Array) => void) => {
     const handler = (_event: Electron.IpcRendererEvent, buf: ArrayBuffer) =>

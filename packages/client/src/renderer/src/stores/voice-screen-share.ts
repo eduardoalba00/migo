@@ -4,13 +4,20 @@ import { voiceSignal } from "@/lib/voice-signal";
 import {
   playScreenShareStartSound,
   playScreenShareStopSound,
+  playClipSound,
 } from "@/lib/sounds";
 import { useAuthStore } from "./auth";
 import { useAnnotationStore } from "./annotation";
+import { useChannelStore } from "./channels";
+import { useMessageStore } from "./messages";
+import { api } from "@/lib/api";
+import { UPLOAD_ROUTES } from "@migo/shared";
 import type { VoiceStoreState } from "./voice";
 
 type Set = (
-  partial: Partial<VoiceStoreState> | ((state: VoiceStoreState) => Partial<VoiceStoreState>),
+  partial:
+    | Partial<VoiceStoreState>
+    | ((state: VoiceStoreState) => Partial<VoiceStoreState>),
 ) => void;
 type Get = () => VoiceStoreState;
 
@@ -36,7 +43,8 @@ export function createScreenShareActions(set: Set, get: Get) {
         // Create overlay window on the shared display (best-effort)
         if (screenShareSourceId) {
           try {
-            const displayIndex = await window.screenAPI.getDisplayIndex(screenShareSourceId);
+            const displayIndex =
+              await window.screenAPI.getDisplayIndex(screenShareSourceId);
             await window.overlayBridgeAPI.create(displayIndex);
           } catch {}
         }
@@ -69,7 +77,10 @@ export function createScreenShareActions(set: Set, get: Get) {
         // Pre-select the source in the main process so that when
         // getDisplayMedia() is called, the handler provides the right source.
         // Returns the desktopCapturer source ID (e.g. "window:12345:0") or null.
-        const sourceId = await window.screenAPI.selectSource(target.type, target.id);
+        const sourceId = await window.screenAPI.selectSource(
+          target.type,
+          target.id,
+        );
         if (!sourceId) throw new Error("No source selected");
 
         // Map picker type to audio capture source type
@@ -81,6 +92,9 @@ export function createScreenShareActions(set: Set, get: Get) {
         // congestion control, and NACK (tested at 55fps 1440p).
         // Also starts WASAPI process audio capture if available.
         await livekitManager.startScreenShare(sourceId, sourceType);
+
+        // Register clip shortcut (Ctrl+Shift+C)
+        window.screenAPI.registerClipShortcut().catch(() => {});
 
         // Notify server so other clients see the screen share icon
         voiceSignal("startScreenShare", {}).catch(() => {});
@@ -113,7 +127,99 @@ export function createScreenShareActions(set: Set, get: Get) {
         playScreenShareStartSound();
       } catch (err) {
         console.error("Failed to start screen share:", err);
-        set({ isScreenSharing: false, screenShareSourceId: null, screenShareSourceType: null });
+        set({
+          isScreenSharing: false,
+          screenShareSourceId: null,
+          screenShareSourceType: null,
+        });
+      }
+    },
+
+    clipScreenShare: async () => {
+      const { isScreenSharing, currentServerId } = get();
+      if (!isScreenSharing || !currentServerId) {
+        console.warn("[clip] Not screen sharing or no server");
+        return;
+      }
+
+      const replayBuffer = livekitManager.getReplayBuffer();
+      if (!replayBuffer || !replayBuffer.isRecording) {
+        console.warn("[clip] Replay buffer not active");
+        return;
+      }
+
+      try {
+        console.log("[clip] Flushing replay buffer...");
+        const blob = await replayBuffer.flush();
+        if (blob.size === 0) {
+          console.warn("[clip] Empty clip, nothing to upload");
+          return;
+        }
+
+        console.log(
+          `[clip] Got ${(blob.size / 1024 / 1024).toFixed(1)}MB clip`,
+        );
+
+        // Find the "clips" system channel in the current server
+        const channelList = useChannelStore.getState().channelList;
+        if (!channelList) {
+          console.warn("[clip] No channel list loaded");
+          return;
+        }
+
+        // Search for the "clips" channel (uncategorized first, then categories)
+        let targetChannelId: string | null = null;
+        for (const ch of channelList.uncategorized) {
+          if (ch.name === "clips" && ch.type === "text") {
+            targetChannelId = ch.id;
+            break;
+          }
+        }
+        if (!targetChannelId) {
+          for (const cat of channelList.categories) {
+            for (const ch of cat.channels) {
+              if (ch.name === "clips" && ch.type === "text") {
+                targetChannelId = ch.id;
+                break;
+              }
+            }
+            if (targetChannelId) break;
+          }
+        }
+
+        if (!targetChannelId) {
+          console.warn("[clip] No clips channel found in server");
+          return;
+        }
+
+        // Upload the clip as an attachment
+        const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+        const filename = `clip-${timestamp}.webm`;
+        const file = new File([blob], filename, { type: blob.type });
+
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("type", "attachments");
+
+        const uploadResult = await api.upload<{ id: string; url: string }>(
+          UPLOAD_ROUTES.UPLOAD,
+          formData,
+        );
+
+        // Send message with the clip attachment
+        await useMessageStore
+          .getState()
+          .sendMessage(targetChannelId, "🎬 Screen clip", undefined, [
+            uploadResult.id,
+          ]);
+
+        console.log("[clip] Clip uploaded and sent successfully");
+
+        // Play clip success sound + show desktop overlay
+        playClipSound();
+        window.screenAPI.showClipNotification().catch(() => {});
+      } catch (err) {
+        console.error("[clip] Failed to clip screen share:", err);
       }
     },
 
@@ -126,6 +232,9 @@ export function createScreenShareActions(set: Set, get: Get) {
         annotationStore.endSession();
         window.overlayBridgeAPI?.destroy().catch(() => {});
       }
+
+      // Unregister clip shortcut
+      window.screenAPI.unregisterClipShortcut().catch(() => {});
 
       livekitManager.stopScreenShare().catch(() => {});
 
@@ -149,7 +258,9 @@ export function createScreenShareActions(set: Set, get: Get) {
           screenShareSourceType: null,
           joinedStreams: joined,
           focusedScreenShareUserId:
-            s.focusedScreenShareUserId === selfId ? null : s.focusedScreenShareUserId,
+            s.focusedScreenShareUserId === selfId
+              ? null
+              : s.focusedScreenShareUserId,
         };
       });
 

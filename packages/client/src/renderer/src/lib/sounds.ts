@@ -132,8 +132,25 @@ export function playMessageSound() {
 
 export function playMentionSound() {
   // Gentle two-note ping
-  playTones([
-    { freq: 587, duration: 0.12 },
-    { freq: 740, duration: 0.15, delay: 0.08 },
-  ], 0.6);
+  playTones(
+    [
+      { freq: 587, duration: 0.12 },
+      { freq: 740, duration: 0.15, delay: 0.08 },
+    ],
+    0.6,
+  );
+}
+
+// ─── Clip sounds ────────────────────────────────────────────────────────────────
+
+export function playClipSound() {
+  // Bright ascending C5→E5→A5 major triad — snappy "capture" feel
+  playTones(
+    [
+      { freq: 523, duration: 0.08 },
+      { freq: 659, duration: 0.08, delay: 0.06 },
+      { freq: 880, duration: 0.15, delay: 0.06 },
+    ],
+    0.8,
+  );
 }

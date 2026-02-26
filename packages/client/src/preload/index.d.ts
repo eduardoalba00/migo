@@ -22,8 +22,15 @@ declare global {
 
   interface ScreenAPI {
     getSources: () => Promise<ScreenSources>;
-    selectSource: (targetType?: string, targetId?: number) => Promise<string | null>;
+    selectSource: (
+      targetType?: string,
+      targetId?: number,
+    ) => Promise<string | null>;
     getDisplayIndex: (sourceId: string) => Promise<number>;
+    registerClipShortcut: () => Promise<boolean | undefined>;
+    unregisterClipShortcut: () => Promise<void>;
+    onClipTriggered: (callback: () => void) => () => void;
+    showClipNotification: () => Promise<void>;
   }
 
   interface UpdaterStatus {
@@ -49,7 +56,10 @@ declare global {
 
   interface AudioCaptureAPI {
     isAvailable: () => Promise<boolean>;
-    start: (sourceId: string, sourceType: "window" | "screen") => Promise<boolean>;
+    start: (
+      sourceId: string,
+      sourceType: "window" | "screen",
+    ) => Promise<boolean>;
     stop: () => Promise<void>;
     onData: (callback: (buffer: Float32Array) => void) => () => void;
   }
