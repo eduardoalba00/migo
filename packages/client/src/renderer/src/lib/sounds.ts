@@ -30,7 +30,7 @@ interface Tone {
  */
 function playTones(tones: Tone[], volumeScale = 1) {
   const ctx = getCtx();
-  const vol = soundVolume * volumeScale * 0.4; // keep overall level soft
+  const vol = soundVolume * volumeScale * 0.7;
   let time = ctx.currentTime + 0.01;
 
   for (const tone of tones) {
