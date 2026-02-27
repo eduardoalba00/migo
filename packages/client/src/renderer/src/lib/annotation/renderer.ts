@@ -17,7 +17,6 @@ export class AnnotationRenderer {
   private getContentRect: () => ContentRect;
   private rafId: number | null = null;
   private dirty = true;
-  private lastItemCount = 0;
 
   constructor(canvas: HTMLCanvasElement, state: AnnotationState, getContentRect: () => ContentRect) {
     this.canvas = canvas;
@@ -31,14 +30,6 @@ export class AnnotationRenderer {
     if (this.rafId !== null) return;
     const loop = () => {
       this.rafId = requestAnimationFrame(loop);
-
-      // Safety net: detect state changes even if onChange didn't fire
-      let count = this.state.shapes.size + this.state.cursors.size + this.state.pings.length + (this.state.draftShape ? 1 : 0);
-      for (const stroke of this.state.strokes.values()) count += stroke.points.length;
-      if (count !== this.lastItemCount) {
-        this.dirty = true;
-        this.lastItemCount = count;
-      }
 
       if (this.dirty) {
         this.render();

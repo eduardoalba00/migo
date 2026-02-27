@@ -9,9 +9,9 @@ import { Room, Track, LocalAudioTrack } from "livekit-client";
 // - Diagnostic counters (underruns, overruns) reported periodically to renderer
 const WORKLET_SOURCE = `
 const RING_BUFFER_SIZE = 48000 * 2 * 4 + 1; // ~4 seconds stereo + sentinel
-const PRE_BUFFER_SAMPLES = 4800;             // ~50ms pre-buffer (5 WASAPI chunks)
-const DRIFT_THRESHOLD = 4800;                // skip if buffer exceeds 50ms
-const DRIFT_TARGET = 1920;                   // skip down to 20ms
+const PRE_BUFFER_SAMPLES = 19200;            // ~200ms pre-buffer (absorbs WASAPI startup delay)
+const DRIFT_THRESHOLD = 48000;               // skip if buffer exceeds 500ms
+const DRIFT_TARGET = 19200;                  // skip down to 200ms
 
 class AudioCaptureProcessor extends AudioWorkletProcessor {
   constructor() {
