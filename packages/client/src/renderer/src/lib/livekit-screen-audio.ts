@@ -1,4 +1,4 @@
-import { Room, Track, LocalAudioTrack } from "livekit-client";
+import { Room, Track, LocalAudioTrack, AudioPresets } from "livekit-client";
 
 // Inline worklet source — avoids needing a separate file URL for addModule().
 //
@@ -172,6 +172,9 @@ export class ScreenShareAudioPipeline {
         const localTrack = new LocalAudioTrack(audioTrack);
         await room.localParticipant.publishTrack(localTrack, {
           source: Track.Source.ScreenShareAudio,
+          dtx: false,
+          forceStereo: true,
+          audioPreset: AudioPresets.musicStereo,
         });
       }
     } catch (err) {
