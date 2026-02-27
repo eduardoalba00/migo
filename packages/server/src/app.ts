@@ -39,7 +39,7 @@ export async function buildApp(config: Config, db: AppDatabase) {
   });
 
   await app.register(rateLimit, {
-    max: 100,
+    max: 300,
     timeWindow: "1 minute",
     allowList: (req) => req.url === "/ws",
   });
