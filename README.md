@@ -75,8 +75,9 @@ Open these ports on your server (port forwarding):
 | Port        | Protocol | Purpose                                            |
 | ----------- | -------- | -------------------------------------------------- |
 | 443         | UDP      | TURN relay (screen share through restrictive NATs) |
-| 8080        | TCP      | Migo API + WebSocket                               |
+| 7880        | TCP      | LiveKit signaling (not needed with HTTPS/domain)   |
 | 7881        | TCP      | LiveKit WebRTC TCP fallback                        |
+| 8080        | TCP      | Migo API + WebSocket                               |
 | 50000–60000 | UDP      | LiveKit WebRTC media                               |
 
 **HTTPS mode** (if you configured a domain during setup):
@@ -93,8 +94,9 @@ If your firewall wasn't configured by the install script, you can open the requi
 
 ```bash
 sudo ufw allow 443/udp
-sudo ufw allow 8080/tcp
+sudo ufw allow 7880/tcp
 sudo ufw allow 7881/tcp
+sudo ufw allow 8080/tcp
 sudo ufw allow 50000:60000/udp
 
 # HTTPS mode only
