@@ -87,7 +87,7 @@ export class LiveKitManager {
           maxFramerate: 60,
         },
         screenShareSimulcastLayers: [],
-        videoCodec: "h264",
+        videoCodec: "vp9",
       },
     });
 
@@ -271,7 +271,7 @@ export class LiveKitManager {
       {
         audio: !useNativeAudio,
         contentHint: "motion",
-        resolution: { width: 3840, height: 2160, frameRate: 60 },
+        resolution: { width: 3440, height: 1440, frameRate: 60 },
       },
       {
         screenShareEncoding: {
@@ -279,13 +279,9 @@ export class LiveKitManager {
           maxFramerate: 60,
         },
         screenShareSimulcastLayers: [],
-        videoCodec: "h264",
+        videoCodec: "vp9",
       },
     );
-
-    // Force H.264 High Profile on the screen share transceiver so WebRTC
-    // negotiates Level 5.1+ (required for 1440p@60fps — lower levels cap at 30fps).
-    this.forceH264HighProfile();
 
     // Start WASAPI process audio capture if available (Electron only)
     if (useNativeAudio) {
@@ -294,58 +290,6 @@ export class LiveKitManager {
 
     // Start replay buffer for clip capture
     this.startReplayBuffer();
-  }
-
-  /**
-   * Force H.264 High Profile on the screen share video transceiver.
-   * Default WebRTC negotiation often picks Constrained Baseline which caps
-   * 1440p at 30fps. High Profile Level 5.1+ supports 1440p@60fps.
-   */
-  private forceH264HighProfile(): void {
-    try {
-      const engine = (this.room as any)?.engine;
-      const publisher = engine?.pcManager?.publisher;
-      if (!publisher) return;
-
-      const transceivers: RTCRtpTransceiver[] = publisher.getTransceivers();
-      const capabilities = RTCRtpSender.getCapabilities?.("video");
-      if (!capabilities) return;
-
-      // Filter H.264 codecs to only High Profile (profile_idc = 0x64)
-      const h264High = capabilities.codecs.filter((c) => {
-        if (c.mimeType.toLowerCase() !== "video/h264") return false;
-        // High Profile profile-level-ids start with "64"
-        return c.sdpFmtpLine?.includes("profile-level-id=64");
-      });
-
-      if (h264High.length === 0) return;
-
-      // Include non-H.264 codecs as fallback (RTX, RED, etc.)
-      const nonH264 = capabilities.codecs.filter(
-        (c) => c.mimeType.toLowerCase() !== "video/h264",
-      );
-
-      // Find the screen share video transceiver (most recently added video sender)
-      const screenPub = this.room?.localParticipant.getTrackPublication(
-        Track.Source.ScreenShare,
-      );
-      const screenTrack = screenPub?.track?.mediaStreamTrack;
-
-      for (const t of transceivers) {
-        if (
-          t.sender.track === screenTrack &&
-          t.sender.track?.kind === "video"
-        ) {
-          t.setCodecPreferences([...h264High, ...nonH264]);
-          // Mark renegotiation needed so LiveKit sends a new offer
-          publisher.renegotiate = true;
-          publisher.negotiate();
-          break;
-        }
-      }
-    } catch (e) {
-      console.warn("[livekit] failed to force H.264 High Profile:", e);
-    }
   }
 
   /** AudioContext + destination used to mix all audio into the replay buffer */
