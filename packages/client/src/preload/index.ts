@@ -23,19 +23,6 @@ const screenAPI = {
     >,
   getDisplayIndex: (sourceId: string) =>
     ipcRenderer.invoke("screen:getDisplayIndex", sourceId) as Promise<number>,
-  registerClipShortcut: () =>
-    ipcRenderer.invoke("screen:registerClipShortcut") as Promise<
-      boolean | undefined
-    >,
-  unregisterClipShortcut: () =>
-    ipcRenderer.invoke("screen:unregisterClipShortcut") as Promise<void>,
-  onClipTriggered: (callback: () => void) => {
-    const handler = () => callback();
-    ipcRenderer.on("screen:clip-triggered", handler);
-    return () => ipcRenderer.removeListener("screen:clip-triggered", handler);
-  },
-  showClipNotification: () =>
-    ipcRenderer.invoke("screen:showClipNotification") as Promise<void>,
 };
 
 contextBridge.exposeInMainWorld("screenAPI", screenAPI);

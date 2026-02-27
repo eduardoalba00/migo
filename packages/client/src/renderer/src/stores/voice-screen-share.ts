@@ -5,14 +5,9 @@ import { isElectron } from "@/lib/platform";
 import {
   playScreenShareStartSound,
   playScreenShareStopSound,
-  playClipSound,
 } from "@/lib/sounds";
 import { useAuthStore } from "./auth";
 import { useAnnotationStore } from "./annotation";
-import { useChannelStore } from "./channels";
-import { useMessageStore } from "./messages";
-import { api } from "@/lib/api";
-import { UPLOAD_ROUTES } from "@migo/shared";
 import type { VoiceStoreState } from "./voice";
 
 type Set = (
@@ -98,9 +93,6 @@ export function createScreenShareActions(set: Set, get: Get) {
         // On web, the browser shows its native picker.
         await livekitManager.startScreenShare(sourceId ?? undefined, sourceType);
 
-        // Register clip shortcut (Ctrl+Shift+C) — Electron only
-        window.screenAPI?.registerClipShortcut().catch(() => {});
-
         // Notify server so other clients see the screen share icon
         voiceSignal("startScreenShare", {}).catch(() => {});
 
@@ -140,94 +132,6 @@ export function createScreenShareActions(set: Set, get: Get) {
       }
     },
 
-    clipScreenShare: async () => {
-      const { isScreenSharing, currentServerId } = get();
-      if (!isScreenSharing || !currentServerId) {
-        console.warn("[clip] Not screen sharing or no server");
-        return;
-      }
-
-      const replayBuffer = livekitManager.getReplayBuffer();
-      if (!replayBuffer || !replayBuffer.isRecording) {
-        console.warn("[clip] Replay buffer not active");
-        return;
-      }
-
-      try {
-        console.log("[clip] Flushing replay buffer...");
-        const blob = await replayBuffer.flush();
-        if (blob.size === 0) {
-          console.warn("[clip] Empty clip, nothing to upload");
-          return;
-        }
-
-        console.log(
-          `[clip] Got ${(blob.size / 1024 / 1024).toFixed(1)}MB clip`,
-        );
-
-        // Find the "clips" system channel in the current server
-        const channelList = useChannelStore.getState().channelList;
-        if (!channelList) {
-          console.warn("[clip] No channel list loaded");
-          return;
-        }
-
-        // Search for the "clips" channel (uncategorized first, then categories)
-        let targetChannelId: string | null = null;
-        for (const ch of channelList.uncategorized) {
-          if (ch.name === "clips" && ch.type === "text") {
-            targetChannelId = ch.id;
-            break;
-          }
-        }
-        if (!targetChannelId) {
-          for (const cat of channelList.categories) {
-            for (const ch of cat.channels) {
-              if (ch.name === "clips" && ch.type === "text") {
-                targetChannelId = ch.id;
-                break;
-              }
-            }
-            if (targetChannelId) break;
-          }
-        }
-
-        if (!targetChannelId) {
-          console.warn("[clip] No clips channel found in server");
-          return;
-        }
-
-        // Upload the clip as an attachment
-        const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-        const filename = `clip-${timestamp}.webm`;
-        const file = new File([blob], filename, { type: blob.type });
-
-        const formData = new FormData();
-        formData.append("file", file);
-        formData.append("type", "attachments");
-
-        const uploadResult = await api.upload<{ id: string; url: string }>(
-          UPLOAD_ROUTES.UPLOAD,
-          formData,
-        );
-
-        // Send message with the clip attachment
-        await useMessageStore
-          .getState()
-          .sendMessage(targetChannelId, "🎬 Screen clip", undefined, [
-            uploadResult.id,
-          ]);
-
-        console.log("[clip] Clip uploaded and sent successfully");
-
-        // Play clip success sound + show desktop overlay (Electron only)
-        playClipSound();
-        window.screenAPI?.showClipNotification().catch(() => {});
-      } catch (err) {
-        console.error("[clip] Failed to clip screen share:", err);
-      }
-    },
-
     stopScreenShare: () => {
       // End annotation session if active
       const { isSessionMode } = get();
@@ -237,9 +141,6 @@ export function createScreenShareActions(set: Set, get: Get) {
         annotationStore.endSession();
         window.overlayBridgeAPI?.destroy().catch(() => {});
       }
-
-      // Unregister clip shortcut (Electron only)
-      window.screenAPI?.unregisterClipShortcut().catch(() => {});
 
       livekitManager.stopScreenShare().catch(() => {});
 

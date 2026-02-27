@@ -73,16 +73,6 @@ export function serverRoutes(
           joinedAt: now,
         });
 
-        // Auto-create system "clips" text channel (always at top)
-        await db.insert(channels).values({
-          id: crypto.randomUUID(),
-          serverId,
-          name: "clips",
-          type: "text",
-          position: -1,
-          isSystem: true,
-        });
-
         // Auto-create "general" text channel
         await db.insert(channels).values({
           id: crypto.randomUUID(),

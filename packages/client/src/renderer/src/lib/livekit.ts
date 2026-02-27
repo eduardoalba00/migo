@@ -13,7 +13,6 @@ import {
   type SpeakingChangeCallback,
 } from "./livekit-vad";
 import { ScreenShareAudioPipeline } from "./livekit-screen-audio";
-import { ReplayBuffer } from "./replay-buffer";
 
 export type { SpeakingChangeCallback } from "./livekit-vad";
 export type ScreenTrackCallback = (
@@ -41,7 +40,6 @@ export class LiveKitManager {
   private screenShareMuted = new Map<string, boolean>();
 
   private audioContext: AudioContext | null = null;
-  private replayBuffer: ReplayBuffer | null = null;
 
   // Screen shares the user has opted into viewing
   joinedStreams = new Set<string>();
@@ -57,11 +55,6 @@ export class LiveKitManager {
       Track.Source.ScreenShare,
     );
     return pub?.track?.mediaStreamTrack ?? null;
-  }
-
-  /** Returns the active replay buffer (available while screen sharing). */
-  getReplayBuffer(): ReplayBuffer | null {
-    return this.replayBuffer;
   }
 
   setSpeakingCallback(cb: SpeakingChangeCallback | null) {
@@ -287,97 +280,10 @@ export class LiveKitManager {
     if (useNativeAudio) {
       await this.screenAudio.start(this.room, sourceId, sourceType);
     }
-
-    // Start replay buffer for clip capture
-    this.startReplayBuffer();
-  }
-
-  /** AudioContext + destination used to mix all audio into the replay buffer */
-  private replayMixCtx: AudioContext | null = null;
-  private replayMixDest: MediaStreamAudioDestinationNode | null = null;
-
-  private startReplayBuffer(): void {
-    // Stop any existing buffer
-    if (this.replayBuffer) {
-      this.replayBuffer.stop();
-      this.replayBuffer = null;
-    }
-    // Clean up previous mix context
-    if (this.replayMixCtx) {
-      this.replayMixCtx.close().catch(() => {});
-      this.replayMixCtx = null;
-      this.replayMixDest = null;
-    }
-
-    const videoTrack = this.getLocalScreenShareTrack();
-    if (!videoTrack) return;
-
-    // Create a mixing AudioContext to combine all audio sources
-    const mixCtx = new AudioContext();
-    const mixDest = mixCtx.createMediaStreamDestination();
-    this.replayMixCtx = mixCtx;
-    this.replayMixDest = mixDest;
-
-    // Helper: connect a MediaStreamTrack to the mix destination
-    const connectTrack = (track: MediaStreamTrack) => {
-      try {
-        const source = mixCtx.createMediaStreamSource(new MediaStream([track]));
-        source.connect(mixDest);
-      } catch {}
-    };
-
-    // 1. Screen share audio (WASAPI captured audio)
-    const screenAudioPub = this.room?.localParticipant.getTrackPublication(
-      Track.Source.ScreenShareAudio,
-    );
-    if (screenAudioPub?.track?.mediaStreamTrack) {
-      connectTrack(screenAudioPub.track.mediaStreamTrack);
-    }
-
-    // 2. Local microphone audio
-    const localMicTrack = this.getLocalMicTrack();
-    if (localMicTrack?.mediaStreamTrack) {
-      connectTrack(localMicTrack.mediaStreamTrack);
-    }
-
-    // 3. All remote participants' mic audio tracks
-    if (this.room) {
-      for (const participant of this.room.remoteParticipants.values()) {
-        for (const pub of participant.trackPublications.values()) {
-          if (
-            pub.source === Track.Source.Microphone &&
-            pub.track?.mediaStreamTrack
-          ) {
-            connectTrack(pub.track.mediaStreamTrack);
-          }
-        }
-      }
-    }
-
-    // Build the final stream: screen video + mixed audio
-    const stream = new MediaStream([videoTrack]);
-    for (const audioTrack of mixDest.stream.getAudioTracks()) {
-      stream.addTrack(audioTrack);
-    }
-
-    this.replayBuffer = new ReplayBuffer(stream);
-    this.replayBuffer.start();
   }
 
   async stopScreenShare(): Promise<void> {
     if (!this.room) return;
-
-    // Stop replay buffer
-    if (this.replayBuffer) {
-      this.replayBuffer.stop();
-      this.replayBuffer = null;
-    }
-    // Clean up replay mix context
-    if (this.replayMixCtx) {
-      this.replayMixCtx.close().catch(() => {});
-      this.replayMixCtx = null;
-      this.replayMixDest = null;
-    }
 
     // Stop WASAPI audio capture first
     await this.screenAudio.stop(this.room);

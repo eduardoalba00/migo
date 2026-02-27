@@ -61,7 +61,6 @@ export interface VoiceStoreState {
   toggleScreenShare: () => void;
   startScreenShare: (target: { type: string; id: number }) => Promise<void>;
   stopScreenShare: () => void;
-  clipScreenShare: () => Promise<void>;
   handleScreenShareStart: (data: { userId: string; channelId: string }) => void;
   handleScreenShareStop: (data: { userId: string }) => void;
   focusScreenShare: (userId: string) => void;
@@ -216,8 +215,7 @@ export const useVoiceStore = create<VoiceStoreState>()((set, get) => ({
       window.overlayBridgeAPI?.destroy().catch(() => {});
     }
 
-    // Stop browser screen share if active + unregister clip shortcut (Electron only)
-    window.screenAPI?.unregisterClipShortcut().catch(() => {});
+    // Stop browser screen share if active
     livekitManager.stopScreenShare().catch(() => {});
 
     livekitManager.disconnect();

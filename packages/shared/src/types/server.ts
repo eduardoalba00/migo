@@ -34,7 +34,6 @@ export interface Channel {
   type: ChannelType;
   topic: string | null;
   position: number;
-  isSystem?: boolean;
 }
 
 export interface CategoryWithChannels extends Category {

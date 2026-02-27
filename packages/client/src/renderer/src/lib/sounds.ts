@@ -141,16 +141,3 @@ export function playMentionSound() {
   );
 }
 
-// ─── Clip sounds ────────────────────────────────────────────────────────────────
-
-export function playClipSound() {
-  // Bright ascending C5→E5→A5 major triad — snappy "capture" feel
-  playTones(
-    [
-      { freq: 523, duration: 0.08 },
-      { freq: 659, duration: 0.08, delay: 0.06 },
-      { freq: 880, duration: 0.15, delay: 0.06 },
-    ],
-    0.8,
-  );
-}

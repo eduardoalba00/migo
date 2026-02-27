@@ -9,7 +9,6 @@ import {
   Link,
   Settings,
   Trash2,
-  Film,
 } from "lucide-react";
 import { useServerStore } from "@/stores/servers";
 import { useChannelStore } from "@/stores/channels";
@@ -131,8 +130,6 @@ export function ChannelSidebar({ serverId }: ChannelSidebarProps) {
         >
           {isVoice ? (
             <Volume2 className="h-4 w-4 shrink-0 opacity-50" />
-          ) : channel.isSystem ? (
-            <Film className="h-4 w-4 shrink-0 opacity-50" />
           ) : (
             <Hash className="h-4 w-4 shrink-0 opacity-50" />
           )}

@@ -182,7 +182,6 @@ export function channelRoutes(
           type: channel.type,
           topic: channel.topic,
           position: channel.position,
-          isSystem: channel.isSystem,
         };
 
         pubsub.publish(`server:${serverId}`, {
@@ -232,7 +231,6 @@ export function channelRoutes(
             type: ch.type,
             topic: ch.topic,
             position: ch.position,
-            isSystem: ch.isSystem,
           }));
 
         const categoriesWithChannels = allCategories.map((cat) => ({
@@ -250,7 +248,6 @@ export function channelRoutes(
               type: ch.type,
               topic: ch.topic,
               position: ch.position,
-              isSystem: ch.isSystem,
             })),
         }));
 
@@ -297,17 +294,6 @@ export function channelRoutes(
           return reply.status(404).send({ error: "Channel not found" });
         }
 
-        // Prevent renaming system channels (e.g. #clips)
-        if (
-          existing.isSystem &&
-          parsed.data.name &&
-          parsed.data.name !== existing.name
-        ) {
-          return reply
-            .status(403)
-            .send({ error: "Cannot rename system channel" });
-        }
-
         await db
           .update(channels)
           .set(parsed.data)
@@ -327,7 +313,6 @@ export function channelRoutes(
           type: channel.type,
           topic: channel.topic,
           position: channel.position,
-          isSystem: channel.isSystem,
         };
 
         pubsub.publish(`server:${serverId}`, {
@@ -367,13 +352,6 @@ export function channelRoutes(
 
         if (!channel) {
           return reply.status(404).send({ error: "Channel not found" });
-        }
-
-        // Prevent deleting system channels (e.g. #clips)
-        if (channel.isSystem) {
-          return reply
-            .status(403)
-            .send({ error: "Cannot delete system channel" });
         }
 
         await db.delete(channels).where(eq(channels.id, channelId));

@@ -27,10 +27,6 @@ declare global {
       targetId?: number,
     ) => Promise<string | null>;
     getDisplayIndex: (sourceId: string) => Promise<number>;
-    registerClipShortcut: () => Promise<boolean | undefined>;
-    unregisterClipShortcut: () => Promise<void>;
-    onClipTriggered: (callback: () => void) => () => void;
-    showClipNotification: () => Promise<void>;
   }
 
   interface UpdaterStatus {
