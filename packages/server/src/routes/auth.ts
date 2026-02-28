@@ -14,6 +14,7 @@ function userToPublic(user: typeof users.$inferSelect) {
     avatarUrl: user.avatarUrl,
     status: user.status,
     customStatus: user.customStatus,
+    joinSoundUrl: user.joinSoundUrl,
     createdAt: user.createdAt.toISOString(),
     updatedAt: user.updatedAt.toISOString(),
   };
@@ -136,6 +137,7 @@ export function authRoutes(db: AppDatabase, authService: AuthService) {
       if (typeof body.avatarUrl === "string" || body.avatarUrl === null) updates.avatarUrl = body.avatarUrl;
       if (typeof body.customStatus === "string" || body.customStatus === null) updates.customStatus = body.customStatus;
       if (typeof body.status === "string" && ["online", "idle", "dnd", "offline"].includes(body.status)) updates.status = body.status;
+      if (typeof body.joinSoundUrl === "string" || body.joinSoundUrl === null) updates.joinSoundUrl = body.joinSoundUrl;
 
       if (Object.keys(updates).length === 0) {
         return reply.status(400).send({ error: "No valid fields to update" });

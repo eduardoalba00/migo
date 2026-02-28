@@ -123,6 +123,71 @@ export function playScreenShareStopSound() {
   ]);
 }
 
+// ─── Custom join sounds ─────────────────────────────────────────────────────────
+
+const soundCache = new Map<string, AudioBuffer>();
+
+/**
+ * Fetch, decode, normalize, and play a custom audio file.
+ * Caches decoded AudioBuffers in memory for fast replays.
+ */
+export async function playCustomSound(url: string): Promise<void> {
+  const ctx = getCtx();
+  let buffer = soundCache.get(url);
+  if (!buffer) {
+    const response = await fetch(url);
+    if (!response.ok) {
+      playJoinSound(); // fallback on fetch error
+      return;
+    }
+    const arrayBuffer = await response.arrayBuffer();
+    buffer = await ctx.decodeAudioData(arrayBuffer);
+    soundCache.set(url, buffer);
+  }
+
+  // Volume normalization — normalize peak to match synthesized sound level
+  // Synthesized sounds use soundVolume * 0.7, so we target the same effective gain
+  const targetPeak = soundVolume * 0.7;
+  let peak = 0;
+  for (let ch = 0; ch < buffer.numberOfChannels; ch++) {
+    const data = buffer.getChannelData(ch);
+    for (let i = 0; i < data.length; i++) {
+      const abs = Math.abs(data[i]);
+      if (abs > peak) peak = abs;
+    }
+  }
+  const normGain = peak > 0 ? targetPeak / peak : 1;
+
+  const source = ctx.createBufferSource();
+  source.buffer = buffer;
+
+  const gain = ctx.createGain();
+  gain.gain.setValueAtTime(normGain, ctx.currentTime);
+
+  source.connect(gain);
+  gain.connect(ctx.destination);
+  source.start();
+}
+
+export function clearSoundCache(url?: string) {
+  if (url) {
+    soundCache.delete(url);
+  } else {
+    soundCache.clear();
+  }
+}
+
+/**
+ * Check audio duration client-side before uploading.
+ * Returns duration in seconds, or throws if the file can't be decoded.
+ */
+export async function getAudioDuration(file: File): Promise<number> {
+  const ctx = getCtx();
+  const arrayBuffer = await file.arrayBuffer();
+  const buffer = await ctx.decodeAudioData(arrayBuffer);
+  return buffer.duration;
+}
+
 // ─── Notification sounds ────────────────────────────────────────────────────────
 
 export function playMessageSound() {

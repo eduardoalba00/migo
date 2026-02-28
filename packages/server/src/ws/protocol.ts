@@ -134,6 +134,7 @@ export function handleConnection(
                   username: u?.username ?? "",
                   displayName: u?.displayName ?? "",
                   avatarUrl: u?.avatarUrl ?? null,
+                  joinSoundUrl: u?.joinSoundUrl ?? null,
                 },
               }),
             );

@@ -203,6 +203,7 @@ async function broadcastVoiceState(
       username: user?.username ?? "",
       displayName: user?.displayName ?? "",
       avatarUrl: user?.avatarUrl ?? null,
+      joinSoundUrl: user?.joinSoundUrl ?? null,
     },
   });
 }

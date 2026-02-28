@@ -36,6 +36,13 @@
       "when": 1772175484000,
       "tag": "0004_remove_clips_feature",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1772275484000,
+      "tag": "0005_add_join_sound",
+      "breakpoints": true
     }
   ]
 }

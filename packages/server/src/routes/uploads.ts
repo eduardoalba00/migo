@@ -12,6 +12,7 @@ import fsPromises from "node:fs/promises";
 import path from "node:path";
 
 const MAX_FILE_SIZE_MB = 50;
+const MAX_SOUND_SIZE_MB = 2;
 
 export function uploadRoutes(
   db: AppDatabase,
@@ -22,7 +23,7 @@ export function uploadRoutes(
     const requireAuth = createAuthMiddleware(authService);
 
     // Ensure upload directories exist
-    const dirs = ["avatars", "icons", "attachments"];
+    const dirs = ["avatars", "icons", "attachments", "sounds"];
     for (const dir of dirs) {
       const fullPath = path.join(config.uploadDir, dir);
       fs.mkdirSync(fullPath, { recursive: true });
@@ -55,7 +56,21 @@ export function uploadRoutes(
         ? "avatars"
         : file.fieldname === "icon"
           ? "icons"
-          : "attachments";
+          : file.fieldname === "sound"
+            ? "sounds"
+            : "attachments";
+
+      // Enforce stricter size limit for sounds
+      if (subfolder === "sounds") {
+        const maxSoundBytes = MAX_SOUND_SIZE_MB * 1024 * 1024;
+        if (buffer.length > maxSoundBytes) {
+          return reply.status(413).send({ error: `Sound file too large (max ${MAX_SOUND_SIZE_MB}MB)` });
+        }
+        const audioMimeTypes = ["audio/mpeg", "audio/wav", "audio/ogg", "audio/webm", "audio/mp4", "audio/x-wav"];
+        if (!audioMimeTypes.includes(file.mimetype)) {
+          return reply.status(400).send({ error: "Sound must be an audio file (mp3, wav, ogg, webm)" });
+        }
+      }
 
       const ext = path.extname(file.filename) || "";
       const uniqueName = `${crypto.randomUUID()}${ext}`;

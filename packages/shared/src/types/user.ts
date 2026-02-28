@@ -7,6 +7,7 @@ export interface User {
   avatarUrl: string | null;
   status: UserStatus;
   customStatus: string | null;
+  joinSoundUrl: string | null;
   createdAt: string;
   updatedAt: string;
 }

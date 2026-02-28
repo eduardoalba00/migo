@@ -11,7 +11,9 @@ import {
   playUnmuteSound,
   playDeafenSound,
   playUndeafenSound,
+  playCustomSound,
 } from "@/lib/sounds";
+import { resolveUploadUrl } from "@/lib/api";
 import { useAuthStore } from "./auth";
 import { useMemberStore } from "./members";
 import { useAnnotationStore } from "./annotation";
@@ -191,7 +193,14 @@ export const useVoiceStore = create<VoiceStoreState>()((set, get) => ({
       }
 
       set({ isConnecting: false });
-      playJoinSound();
+
+      // Play custom join sound if user has one, otherwise default chime
+      const joinSoundUrl = resolveUploadUrl(useAuthStore.getState().user?.joinSoundUrl);
+      if (joinSoundUrl) {
+        playCustomSound(joinSoundUrl).catch(() => playJoinSound());
+      } else {
+        playJoinSound();
+      }
     } catch (err) {
       console.error("Failed to join voice channel:", err);
       set({
@@ -356,8 +365,13 @@ export const useVoiceStore = create<VoiceStoreState>()((set, get) => ({
       const wasInOurChannel = !!channelUsers[currentChannelId]?.[state.userId];
 
       if (state.channelId === currentChannelId && !wasInOurChannel) {
-        // Remote user joined our channel
-        playJoinSound();
+        // Remote user joined our channel — play their custom sound or default
+        const joinSoundUrl = resolveUploadUrl(state.joinSoundUrl);
+        if (joinSoundUrl) {
+          playCustomSound(joinSoundUrl).catch(() => playJoinSound());
+        } else {
+          playJoinSound();
+        }
       } else if (state.channelId === null && wasInOurChannel) {
         // Remote user left our channel
         playLeaveSound();

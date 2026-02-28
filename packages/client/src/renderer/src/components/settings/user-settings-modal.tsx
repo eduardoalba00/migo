@@ -1,10 +1,12 @@
-import { useState, useEffect } from "react";
-import { X, User, Lock, Palette, Volume2 } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { X, User, Lock, Palette, Volume2, Upload, Play, Trash2 } from "lucide-react";
 import { useAuthStore } from "@/stores/auth";
 import { useVoiceStore } from "@/stores/voice";
 import { api, resolveUploadUrl } from "@/lib/api";
 import { livekitManager } from "@/lib/livekit";
+import { playCustomSound, getAudioDuration, clearSoundCache } from "@/lib/sounds";
 import { AUTH_ROUTES, UPLOAD_ROUTES } from "@migo/shared";
+import { toast } from "sonner";
 
 interface UserSettingsModalProps {
   onClose: () => void;
@@ -238,6 +240,12 @@ function VoiceTab() {
   const noiseSuppression = useVoiceStore((s) => s.noiseSuppression);
   const toggleNoiseSuppression = useVoiceStore((s) => s.toggleNoiseSuppression);
 
+  const user = useAuthStore((s) => s.user);
+  const fetchMe = useAuthStore((s) => s.fetchMe);
+  const [uploadingSound, setUploadingSound] = useState(false);
+  const [playingPreview, setPlayingPreview] = useState(false);
+  const soundInputRef = useRef<HTMLInputElement>(null);
+
   useEffect(() => {
     navigator.mediaDevices.enumerateDevices().then(setDevices).catch(() => {});
   }, []);
@@ -252,6 +260,87 @@ function VoiceTab() {
     setOutputDevice(deviceId);
     localStorage.setItem("migo-output-device", deviceId);
     livekitManager.setOutputDevice(deviceId || null);
+  };
+
+  const handleSoundUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = "";
+
+    // Client-side size check
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error("Sound file must be under 2MB");
+      return;
+    }
+
+    // Client-side duration check
+    try {
+      const duration = await getAudioDuration(file);
+      if (duration > 5) {
+        toast.error("Sound must be 5 seconds or shorter");
+        return;
+      }
+    } catch {
+      toast.error("Could not read audio file");
+      return;
+    }
+
+    setUploadingSound(true);
+    try {
+      const formData = new FormData();
+      formData.append("sound", file);
+
+      const response = await fetch(
+        `${api.getBaseUrl()}${UPLOAD_ROUTES.UPLOAD}`,
+        {
+          method: "POST",
+          headers: { Authorization: `Bearer ${useAuthStore.getState().tokens?.accessToken}` },
+          body: formData,
+        },
+      );
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        toast.error(data.error || "Upload failed");
+        return;
+      }
+
+      const data = await response.json();
+
+      // Clear old cached sound
+      if (user?.joinSoundUrl) {
+        clearSoundCache(resolveUploadUrl(user.joinSoundUrl)!);
+      }
+
+      await api.patch(AUTH_ROUTES.ME, { joinSoundUrl: data.url });
+      await fetchMe();
+      toast.success("Join sound updated!");
+    } catch {
+      toast.error("Failed to upload sound");
+    } finally {
+      setUploadingSound(false);
+    }
+  };
+
+  const handlePreviewSound = async () => {
+    const url = resolveUploadUrl(user?.joinSoundUrl);
+    if (!url) return;
+    setPlayingPreview(true);
+    try {
+      await playCustomSound(url);
+    } finally {
+      // AudioBuffer plays are fire-and-forget, give it a moment for UX
+      setTimeout(() => setPlayingPreview(false), 1000);
+    }
+  };
+
+  const handleRemoveSound = async () => {
+    if (user?.joinSoundUrl) {
+      clearSoundCache(resolveUploadUrl(user.joinSoundUrl)!);
+    }
+    await api.patch(AUTH_ROUTES.ME, { joinSoundUrl: null });
+    await fetchMe();
+    toast.success("Join sound removed");
   };
 
   const inputs = devices.filter((d) => d.kind === "audioinput");
@@ -307,6 +396,63 @@ function VoiceTab() {
             }`}
           />
         </button>
+      </div>
+
+      {/* Join Sound */}
+      <div className="space-y-3 max-w-sm">
+        <div>
+          <label className="text-sm font-medium">Join Sound</label>
+          <p className="text-xs text-muted-foreground">
+            Custom sound that plays when you join a voice channel (max 5 seconds)
+          </p>
+        </div>
+        <input
+          ref={soundInputRef}
+          type="file"
+          accept="audio/*"
+          className="hidden"
+          onChange={handleSoundUpload}
+        />
+        {user?.joinSoundUrl ? (
+          <div className="flex items-center gap-2">
+            <div className="flex-1 flex items-center gap-2 px-3 py-2 bg-muted rounded-md text-sm">
+              <Volume2 className="h-4 w-4 text-muted-foreground shrink-0" />
+              <span className="truncate text-muted-foreground">Custom sound set</span>
+            </div>
+            <button
+              onClick={handlePreviewSound}
+              disabled={playingPreview}
+              className="p-2 bg-muted rounded-md text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+              title="Preview"
+            >
+              <Play className="h-4 w-4" />
+            </button>
+            <button
+              onClick={() => soundInputRef.current?.click()}
+              disabled={uploadingSound}
+              className="p-2 bg-muted rounded-md text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+              title="Replace"
+            >
+              <Upload className="h-4 w-4" />
+            </button>
+            <button
+              onClick={handleRemoveSound}
+              className="p-2 bg-muted rounded-md text-muted-foreground hover:text-destructive transition-colors"
+              title="Remove"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={() => soundInputRef.current?.click()}
+            disabled={uploadingSound}
+            className="flex items-center gap-2 px-4 py-2 bg-muted rounded-md text-sm text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+          >
+            <Upload className="h-4 w-4" />
+            {uploadingSound ? "Uploading..." : "Upload Sound"}
+          </button>
+        )}
       </div>
     </div>
   );

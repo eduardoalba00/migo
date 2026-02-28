@@ -9,6 +9,7 @@ export interface VoiceState {
   username?: string;
   displayName?: string;
   avatarUrl?: string | null;
+  joinSoundUrl?: string | null;
 }
 
 export type VoiceSignalAction = "joinVoice";

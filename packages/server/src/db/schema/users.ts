@@ -10,6 +10,7 @@ export const users = pgTable("users", {
     .notNull()
     .default("offline"),
   customStatus: text("custom_status"),
+  joinSoundUrl: text("join_sound_url"),
   createdAt: timestamp("created_at")
     .notNull()
     .$defaultFn(() => new Date()),
