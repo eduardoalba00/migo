@@ -18,6 +18,8 @@ import {
 // GPU acceleration for video decode
 app.commandLine.appendSwitch("enable-gpu-rasterization");
 app.commandLine.appendSwitch("enable-accelerated-video-decode");
+// Prevent Chromium from throttling when a game covers the Migo window
+app.commandLine.appendSwitch("disable-features", "CalculateNativeWinOcclusion");
 
 if (process.env.MIGO_INSTANCE) {
   app.setPath("userData", app.getPath("userData") + "-" + process.env.MIGO_INSTANCE);
@@ -36,6 +38,7 @@ function createWindow(): BrowserWindow {
       preload: join(__dirname, "../preload/index.mjs"),
       sandbox: false,
       contextIsolation: true,
+      backgroundThrottling: false,
     },
   });
 
