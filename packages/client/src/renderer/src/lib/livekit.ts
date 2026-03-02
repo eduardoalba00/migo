@@ -76,7 +76,7 @@ export class LiveKitManager {
       dynacast: false,
       publishDefaults: {
         screenShareEncoding: {
-          maxBitrate: 15_000_000,
+          maxBitrate: 24_000_000,
           maxFramerate: 60,
         },
         screenShareSimulcastLayers: [],
@@ -264,11 +264,11 @@ export class LiveKitManager {
       {
         audio: !useNativeAudio,
         contentHint: "motion",
-        resolution: { width: 3440, height: 1440, frameRate: 60 },
+        resolution: { width: 3840, height: 2160, frameRate: 60 },
       },
       {
         screenShareEncoding: {
-          maxBitrate: 15_000_000,
+          maxBitrate: 24_000_000,
           maxFramerate: 60,
         },
         screenShareSimulcastLayers: [],
