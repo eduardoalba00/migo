@@ -40,6 +40,7 @@ export class LiveKitManager {
   private micProcessor: MicrophoneProcessor | null = null;
   private vad = new VoiceActivityDetector();
   private screenAudio = new ScreenShareAudioPipeline();
+  private screenShareStatsInterval: ReturnType<typeof setInterval> | null = null;
 
   // Audio elements attached to remote audio tracks (mic only)
   private attachedAudioElements = new Map<string, HTMLMediaElement[]>();
@@ -99,6 +100,7 @@ export class LiveKitManager {
     this.setupEventListeners();
 
     await this.room.connect(url, token);
+    (window as any).__lkRoom = this.room;
 
     this.vad.startPolling();
   }
@@ -111,6 +113,7 @@ export class LiveKitManager {
   }
 
   async disconnect(): Promise<void> {
+    this.stopScreenShareStats();
     this.vad.stopPolling();
     this.vad.cleanupAll();
     if (this.micProcessor) {
@@ -148,6 +151,7 @@ export class LiveKitManager {
       await this.room.disconnect();
       this.room = null;
     }
+    (window as any).__lkRoom = null;
   }
 
   async setMicEnabled(enabled: boolean): Promise<void> {
@@ -293,15 +297,104 @@ export class LiveKitManager {
     if (useNativeAudio) {
       await this.screenAudio.start(this.room, sourceId, sourceType);
     }
+
+    this.startScreenShareStats();
   }
 
   async stopScreenShare(): Promise<void> {
     if (!this.room) return;
 
+    this.stopScreenShareStats();
+
     // Stop WASAPI audio capture first
     await this.screenAudio.stop(this.room);
 
     await this.room.localParticipant.setScreenShareEnabled(false);
+  }
+
+  private startScreenShareStats(): void {
+    this.stopScreenShareStats();
+    let prevFramesSent = 0;
+    let prevBytesSent = 0;
+    let prevTimestamp = 0;
+
+    this.screenShareStatsInterval = setInterval(async () => {
+      if (!this.room) return;
+
+      const pub = this.room.localParticipant.getTrackPublication(
+        Track.Source.ScreenShare,
+      );
+      if (!pub?.track) return;
+
+      const sender = pub.track.sender;
+      if (!sender) return;
+
+      const stats = await sender.getStats();
+      stats.forEach((report) => {
+        if (report.type === "outbound-rtp" && report.kind === "video") {
+          const r = report as any;
+          const elapsed = prevTimestamp ? (r.timestamp - prevTimestamp) / 1000 : 0;
+          const framesDelta = r.framesSent - prevFramesSent;
+          const bytesDelta = r.bytesSent - prevBytesSent;
+          const actualFps = elapsed > 0 ? framesDelta / elapsed : 0;
+          const actualBitrate = elapsed > 0 ? (bytesDelta * 8) / elapsed : 0;
+
+          // Skip first sample (no delta yet)
+          if (!prevTimestamp) {
+            prevFramesSent = r.framesSent;
+            prevBytesSent = r.bytesSent;
+            prevTimestamp = r.timestamp;
+            return;
+          }
+
+          console.log(
+            `[screen-share-stats] ` +
+              `fps=${actualFps.toFixed(1)} ` +
+              `resolution=${r.frameWidth}x${r.frameHeight} ` +
+              `bitrate=${(actualBitrate / 1_000_000).toFixed(2)}Mbps ` +
+              `codec=${r.codecId ?? "?"} ` +
+              `encoder=${r.encoderImplementation ?? "?"} ` +
+              `hwAccel=${r.powerEfficientEncoder ?? "?"} ` +
+              `qualityLimit=${r.qualityLimitationReason ?? "none"} ` +
+              `nack=${r.nackCount ?? 0} pli=${r.pliCount ?? 0} ` +
+              `framesEncoded=${r.framesEncoded ?? 0} ` +
+              `totalEncodeTime=${r.totalEncodeTime?.toFixed(2) ?? "?"}s ` +
+              `keyFrames=${r.keyFramesEncoded ?? 0} ` +
+              `retransmit=${r.retransmittedBytesSent ?? 0}B ` +
+              `targetBitrate=${r.targetBitrate ? (r.targetBitrate / 1_000_000).toFixed(2) + "Mbps" : "?"}`,
+          );
+
+          if (r.qualityLimitationDurations) {
+            const d = r.qualityLimitationDurations;
+            console.log(
+              `[screen-share-stats] qualityLimitationDurations: ` +
+                `none=${d.none?.toFixed(1)}s cpu=${d.cpu?.toFixed(1)}s ` +
+                `bandwidth=${d.bandwidth?.toFixed(1)}s other=${d.other?.toFixed(1)}s`,
+            );
+          }
+
+          prevFramesSent = r.framesSent;
+          prevBytesSent = r.bytesSent;
+          prevTimestamp = r.timestamp;
+        }
+
+        if (report.type === "candidate-pair" && (report as any).nominated) {
+          const r = report as any;
+          console.log(
+            `[screen-share-stats] connection: ` +
+              `rtt=${r.currentRoundTripTime ? (r.currentRoundTripTime * 1000).toFixed(0) + "ms" : "?"} ` +
+              `availableOutgoing=${r.availableOutgoingBitrate ? (r.availableOutgoingBitrate / 1_000_000).toFixed(2) + "Mbps" : "?"}`,
+          );
+        }
+      });
+    }, 3000);
+  }
+
+  private stopScreenShareStats(): void {
+    if (this.screenShareStatsInterval) {
+      clearInterval(this.screenShareStatsInterval);
+      this.screenShareStatsInterval = null;
+    }
   }
 
   subscribeScreenShare(userId: string): void {

@@ -143,19 +143,8 @@ export class ScreenShareAudioPipeline {
         { outputChannelCount: [2] },
       );
 
-      // Listen for diagnostic stats from the worklet
-      this.screenAudioWorklet.port.onmessage = (event) => {
-        if (event.data?.type === "stats") {
-          const { underruns, overruns, driftCorrections, bufferLevel, processCount } = event.data;
-          if (underruns > 0 || overruns > 0 || driftCorrections > 0) {
-            console.warn(
-              `[screen-audio] underruns=${underruns} overruns=${overruns} ` +
-                `driftCorrections=${driftCorrections} ` +
-                `bufferLevel=${bufferLevel} processCount=${processCount}`,
-            );
-          }
-        }
-      };
+      // Discard diagnostic stats from the worklet (audio pipeline is stable)
+      this.screenAudioWorklet.port.onmessage = null;
 
       const destination = this.screenAudioContext.createMediaStreamDestination();
       this.screenAudioWorklet.connect(destination);
