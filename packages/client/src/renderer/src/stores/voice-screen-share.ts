@@ -1,5 +1,5 @@
 import { nanoid } from "nanoid";
-import { livekitManager } from "@/lib/livekit";
+import { livekitManager, type ScreenShareResolution } from "@/lib/livekit";
 import { voiceSignal } from "@/lib/voice-signal";
 import { isElectron } from "@/lib/platform";
 import {
@@ -70,7 +70,7 @@ export function createScreenShareActions(set: Set, get: Get) {
       }
     },
 
-    startScreenShare: async (target: { type: string; id: number }) => {
+    startScreenShare: async (target: { type: string; id: number }, resolution?: ScreenShareResolution) => {
       set({ showScreenSharePicker: false });
 
       try {
@@ -91,7 +91,7 @@ export function createScreenShareActions(set: Set, get: Get) {
         // Use LiveKit SDK's setScreenShareEnabled which calls getDisplayMedia()
         // internally. On Electron, the handler provides the pre-selected source.
         // On web, the browser shows its native picker.
-        await livekitManager.startScreenShare(sourceId ?? undefined, sourceType);
+        await livekitManager.startScreenShare(sourceId ?? undefined, sourceType, resolution);
 
         // Notify server so other clients see the screen share icon
         voiceSignal("startScreenShare", {}).catch(() => {});

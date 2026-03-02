@@ -61,7 +61,7 @@ export interface VoiceStoreState {
   getChannelUsers: (channelId: string) => VoiceChannelUser[];
   setUserVolume: (userId: string, volume: number) => void;
   toggleScreenShare: () => void;
-  startScreenShare: (target: { type: string; id: number }) => Promise<void>;
+  startScreenShare: (target: { type: string; id: number }, resolution?: import("@/lib/livekit").ScreenShareResolution) => Promise<void>;
   stopScreenShare: () => void;
   handleScreenShareStart: (data: { userId: string; channelId: string }) => void;
   handleScreenShareStop: (data: { userId: string }) => void;

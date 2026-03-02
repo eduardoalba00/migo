@@ -14,6 +14,16 @@ import {
 } from "./livekit-vad";
 import { ScreenShareAudioPipeline } from "./livekit-screen-audio";
 
+export const SCREEN_SHARE_PRESETS = {
+  "720p":  { height: 720,  fps: 60, bitrate: 5_000_000  },
+  "1080p": { height: 1080, fps: 60, bitrate: 10_000_000 },
+  "1440p": { height: 1440, fps: 60, bitrate: 15_000_000 },
+  "4K":    { height: 2160, fps: 60, bitrate: 24_000_000 },
+} as const;
+
+export type ScreenShareResolution = keyof typeof SCREEN_SHARE_PRESETS;
+export const DEFAULT_SCREEN_SHARE_RESOLUTION: ScreenShareResolution = "1440p";
+
 export type { SpeakingChangeCallback } from "./livekit-vad";
 export type ScreenTrackCallback = (
   participantIdentity: string,
@@ -247,8 +257,11 @@ export class LiveKitManager {
   async startScreenShare(
     sourceId?: string,
     sourceType?: "window" | "screen",
+    resolution?: ScreenShareResolution,
   ): Promise<void> {
     if (!this.room) return;
+
+    const preset = SCREEN_SHARE_PRESETS[resolution ?? DEFAULT_SCREEN_SHARE_RESOLUTION];
 
     // On Electron, audio is captured separately via WASAPI native addon,
     // so we disable getDisplayMedia audio. On web, we request audio from
@@ -264,12 +277,12 @@ export class LiveKitManager {
       {
         audio: !useNativeAudio,
         contentHint: "motion",
-        resolution: { width: 3440, height: 1440, frameRate: 60 },
+        resolution: { width: 3840, height: preset.height, frameRate: preset.fps },
       },
       {
         screenShareEncoding: {
-          maxBitrate: 15_000_000,
-          maxFramerate: 60,
+          maxBitrate: preset.bitrate,
+          maxFramerate: preset.fps,
         },
         screenShareSimulcastLayers: [],
         videoCodec: "vp9",
