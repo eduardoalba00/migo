@@ -81,6 +81,7 @@ export class LiveKitManager {
         },
         screenShareSimulcastLayers: [],
         videoCodec: "vp9",
+        scalabilityMode: "L1T1",
       },
     });
 
@@ -273,6 +274,7 @@ export class LiveKitManager {
         },
         screenShareSimulcastLayers: [],
         videoCodec: "vp9",
+        scalabilityMode: "L1T1",
       },
     );
 
